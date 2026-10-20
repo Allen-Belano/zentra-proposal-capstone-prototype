@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Activity, ChevronDown, DatabaseBackup, GitMerge, LayoutDashboard, LogOut, Menu, Monitor, Moon, PanelLeft, Puzzle,
@@ -61,11 +61,35 @@ function useNav() {
 function NavList({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
   const sections = useNav();
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const navRef = useRef<HTMLElement>(null);
+  const [pill, setPill] = useState<{ top: number; height: number; ready: boolean } | null>(null);
+
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const measure = () => {
+      const active = nav.querySelector<HTMLElement>("a[data-active=true]");
+      // The first placement doesn't animate; after that the highlight slides between links.
+      setPill(active ? (prev) => ({ top: active.offsetTop, height: active.offsetHeight, ready: prev !== null }) : null);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(nav);
+    return () => ro.disconnect();
+  }, [path, collapsed, sections.length]);
+
   return (
-    <nav className="flex flex-col gap-5 px-3">
+    <nav ref={navRef} className="relative flex flex-col gap-5 px-3">
+      {pill && (
+        <span
+          aria-hidden
+          className={cn("absolute inset-x-3 top-0 rounded-xl bg-muted", pill.ready && "transition-[transform,height] duration-300 ease-fluid")}
+          style={{ height: pill.height, transform: `translateY(${pill.top}px)` }}
+        />
+      )}
       {sections.map((sec, i) => (
         <div key={i} className="flex flex-col gap-0.5">
-          {sec.title && !collapsed && <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">{sec.title}</p>}
+          {sec.title && !collapsed && <p className="px-3 pb-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">{sec.title}</p>}
           {sec.title && collapsed && <div className="mx-2 mb-1 h-px bg-sidebar-border" />}
           {sec.items.map((item) => {
             const active = item.to === "/" ? path === "/" : path.startsWith(item.to);
@@ -74,13 +98,15 @@ function NavList({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate?: 
                 key={item.to}
                 to={item.to}
                 onClick={onNavigate}
+                data-active={active}
                 className={cn(
-                  "group flex h-9 items-center gap-2.5 rounded-md px-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground [&_svg]:size-4 [&_svg]:shrink-0",
-                  active && "bg-accent font-medium text-foreground",
+                  "group relative z-10 flex h-10 items-center gap-3 rounded-xl px-3 text-sm text-muted-foreground transition-colors duration-200 hover:text-foreground [&_svg]:size-[18px] [&_svg]:shrink-0",
+                  !active && "hover:bg-muted/50",
+                  active && "font-medium text-foreground",
                   collapsed && "justify-center px-0",
                 )}
               >
-                <span className={cn(active && "text-primary")}>{item.icon}</span>
+                <span className={cn("transition-colors duration-200", active && "text-primary")}>{item.icon}</span>
                 {!collapsed && <span className="truncate">{item.label}</span>}
                 {!collapsed && !!item.count && (
                   <span className="ml-auto rounded-full bg-warning/15 px-1.5 text-xs font-medium tabular text-warning">{item.count}</span>
