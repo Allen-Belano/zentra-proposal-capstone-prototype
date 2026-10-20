@@ -1,20 +1,28 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowRightLeft, Boxes, Building2, Loader2 } from "lucide-react";
+import { ArrowRightLeft, Boxes, Building2, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ZentraLogo, ZentraMark } from "@/components/app/zentra-logo";
-import { DEMO_PASSWORD } from "@/data/seed";
-import { ROLE_LABEL } from "@/lib/rbac";
-import type { Role } from "@/lib/types";
+import { DEMO_PASSWORD, STAFF } from "@/data/seed";
+import { POSITION_LABEL, POSITIONS } from "@/lib/rbac";
+import type { Position } from "@/lib/types";
+
+const POSITION_SCOPE: Record<Position, string> = {
+  accounting: "Credit checks and payments",
+  purchasing: "Supplier POs",
+  inventory: "Stock and receiving reports",
+  invoicing: "Sales invoices and WRs",
+  delivery: "Deliveries and DRs",
+};
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app-store";
 
-const DEMO: { email: string; role: Role; name: string; scope: string }[] = [
-  { email: "superadmin@ifixz.com", role: "super_admin", name: "Maria Santos", scope: "Accounts, roles, and audit log" },
-  { email: "depthead@ifixz.com", role: "dept_head", name: "Carlo Reyes", scope: "Modules, pipeline, sync, and backups" },
-  { email: "employee@ifixz.com", role: "employee", name: "Jessa Cruz", scope: "Inventory and order records" },
+const DEMO: { email: string; title: string; name: string; scope: string }[] = [
+  { email: "superadmin@ifixz.com", title: "Super Admin", name: "Maria Santos", scope: "Accounts, roles, and audit log" },
+  { email: "depthead@ifixz.com", title: "Department Head", name: "Carlo Reyes", scope: "Business overview, sync, and team roles" },
+  ...POSITIONS.map((p) => ({ email: STAFF[p].email, title: POSITION_LABEL[p], name: STAFF[p].name, scope: POSITION_SCOPE[p] })),
 ];
 
 function SourcesDiagram() {
@@ -87,7 +95,7 @@ export function LoginPage() {
       </section>
 
       <section className="safe-top flex min-w-0 items-center justify-center px-5 py-10 sm:px-10">
-        <div className="w-full max-w-sm duration-700 ease-fluid animate-in fade-in-0 slide-in-from-bottom-3">
+        <div className="w-full max-w-md duration-700 ease-fluid animate-in fade-in-0 slide-in-from-bottom-3">
           <ZentraLogo className="mb-8 lg:hidden" />
           <h2 className="text-2xl font-semibold tracking-tight">Sign in</h2>
           <p className="mt-1 text-sm text-muted-foreground">Use your iFixz work account.</p>
@@ -107,21 +115,22 @@ export function LoginPage() {
 
           <div className="mt-8">
             <p className="text-sm font-medium">Demo accounts</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">Password for all three: <span className="font-medium text-foreground">{DEMO_PASSWORD}</span></p>
-            <div className="stagger mt-3 flex flex-col gap-2">
+            <p className="mt-0.5 text-xs text-muted-foreground">Password for all accounts: <span className="font-medium text-foreground">{DEMO_PASSWORD}</span></p>
+            <div className="stagger mt-3 grid gap-2 sm:grid-cols-2">
               {DEMO.map((d) => (
                 <button
                   key={d.email}
                   type="button"
                   disabled={busy}
                   onClick={() => { setEmail(d.email); setPassword(DEMO_PASSWORD); submit(undefined, { email: d.email, password: DEMO_PASSWORD }); }}
-                  className={cn("flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card px-4 py-3 text-left shadow-soft transition-[border-color,box-shadow,transform] duration-200 ease-fluid hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-float active:translate-y-0 disabled:opacity-60 dark:border-border")}
+                  className={cn("flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card px-4 py-3 text-left shadow-soft transition-[border-color,box-shadow,transform] duration-200 ease-fluid hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-float active:translate-y-0 disabled:opacity-60 dark:border-border")}
                 >
                   <div className="min-w-0">
-                    <div className="text-sm font-medium">{ROLE_LABEL[d.role]}</div>
-                    <div className="truncate text-xs text-muted-foreground">{d.name} — {d.scope}</div>
+                    <div className="text-sm font-medium">{d.title}</div>
+                    <div className="truncate text-xs text-muted-foreground">{d.name}</div>
+                    <div className="truncate text-xs text-muted-foreground">{d.scope}</div>
                   </div>
-                  <span className="shrink-0 text-xs text-primary">Sign in</span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                 </button>
               ))}
             </div>
