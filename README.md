@@ -31,7 +31,9 @@ Use **Reset demo data** in the avatar menu to start over.
 
 ## User guide
 
-**[docs/USER_GUIDE.md](docs/USER_GUIDE.md)** explains how to use Zentra:
+New to Zentra? Start with **[docs/QUICK_START.md](docs/QUICK_START.md)**, a one-page guide: sign in, what your role does, and how to move an order.
+
+**[docs/USER_GUIDE.md](docs/USER_GUIDE.md)** has the full detail:
 
 - how an order moves from the won deal to payment, and which role owns each step
 - what each role sees and does
