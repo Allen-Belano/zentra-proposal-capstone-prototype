@@ -1,16 +1,19 @@
-import { ArrowDownLeft, ArrowUpRight, CloudOff, RefreshCw, RotateCw } from "lucide-react";
+import { useState } from "react";
+import { ArrowDownLeft, ArrowUpRight, CheckCircle2, CircleAlert, CloudOff, Layers, RefreshCw, RotateCw, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useSyncNowToast } from "@/components/app/app-shell";
 import { EmptyState, PageHeader } from "@/components/app/bits";
-import type { SyncOperation } from "@/lib/types";
+import type { BatchItemKind, BatchOutcome, BatchRun, SyncOperation } from "@/lib/types";
+import { recordLabel } from "@/lib/validation";
 import { cn, formatDate, formatDateTime, formatPeso, timeAgo } from "@/lib/utils";
-import { useApp } from "@/store/app-store";
+import { useApp, type ConflictPolicy } from "@/store/app-store";
 
 function fmt(key: string, v: string | number | undefined) {
   if (v === undefined || v === "") return "—";
@@ -78,6 +81,137 @@ function FailedCard({ op }: { op: SyncOperation }) {
   );
 }
 
+const KIND_LABEL: Record<BatchItemKind, string> = { writeback: "Failed write-back", conflict: "Sync conflict", rejected: "Rejected row" };
+
+function useBatchItems() {
+  const ops = useApp((s) => s.syncOps);
+  const rejected = useApp((s) => s.rejected);
+  const modules = useApp((s) => s.modules);
+  return [
+    ...ops.filter((o) => o.status === "failed" || o.status === "conflict").map((o) => ({
+      kind: (o.status === "failed" ? "writeback" : "conflict") as BatchItemKind, id: o.id, label: o.recordLabel,
+      type: modules.find((m) => m.id === o.moduleId)?.recordName ?? "Record", issue: o.error ?? "",
+    })),
+    ...rejected.filter((r) => r.status === "open").map((r) => {
+      const m = modules.find((x) => x.id === r.moduleId);
+      return { kind: "rejected" as BatchItemKind, id: r.id, label: recordLabel(m, r.raw) || `Row ${r.rowIndex}`, type: m?.recordName ?? "Record", issue: r.errors.join("; ") };
+    }),
+  ];
+}
+
+const RESULT: Record<BatchOutcome["result"], { label: string; icon: React.ReactNode; tone: string }> = {
+  success: { label: "Succeeded", icon: <CheckCircle2 className="h-4 w-4" />, tone: "text-success" },
+  failed: { label: "Failed", icon: <XCircle className="h-4 w-4" />, tone: "text-destructive" },
+  action: { label: "Needs action", icon: <CircleAlert className="h-4 w-4" />, tone: "text-warning" },
+};
+
+function BatchSummary({ run }: { run: BatchRun }) {
+  return (
+    <Card className="duration-300 ease-fluid animate-in fade-in-0 slide-in-from-bottom-2">
+      <CardHeader>
+        <CardTitle>Processing summary</CardTitle>
+        <CardDescription>{run.outcomes.length} record{run.outcomes.length === 1 ? "" : "s"} processed by {run.by} · {formatDateTime(run.at)}</CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-3 md:grid-cols-3">
+        {(["success", "failed", "action"] as const).map((r) => {
+          const rows = run.outcomes.filter((o) => o.result === r);
+          return (
+            <div key={r} className="rounded-2xl bg-muted p-4">
+              <div className={cn("mb-2 flex items-center gap-2 text-sm font-medium", RESULT[r].tone)}>
+                {RESULT[r].icon}{RESULT[r].label}<span className="ml-auto tabular text-foreground">{rows.length}</span>
+              </div>
+              {rows.length === 0 ? <p className="text-xs text-muted-foreground">None</p> : (
+                <ul className="grid gap-1.5">
+                  {rows.map((o, i) => (
+                    <li key={`${o.label}-${i}`} className="text-sm">
+                      <span className="font-medium">{o.label}</span> <span className="text-xs text-muted-foreground">{o.type}</span>
+                      <span className="block text-xs text-muted-foreground">{o.message}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
+function BatchPanel() {
+  const items = useBatchItems();
+  const batches = useApp((s) => s.batches);
+  const batchProcess = useApp((s) => s.batchProcess);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [policy, setPolicy] = useState<ConflictPolicy>("skip");
+  const [last, setLast] = useState<BatchRun | null>(null);
+  const chosen = items.filter((i) => selected.has(`${i.kind}:${i.id}`));
+  const allOn = items.length > 0 && chosen.length === items.length;
+  const toggle = (key: string) => setSelected((s) => { const n = new Set(s); if (n.has(key)) n.delete(key); else n.add(key); return n; });
+  const run = () => {
+    const result = batchProcess(chosen.map(({ kind, id }) => ({ kind, id })), policy);
+    if (!result) return toast.error("Only Department Heads can run batch processing");
+    setLast(result);
+    setSelected(new Set());
+    const ok = result.outcomes.filter((o) => o.result === "success").length;
+    toast.success("Batch processed", { description: `${ok} of ${result.outcomes.length} records succeeded.` });
+  };
+
+  return (
+    <div className="grid gap-4">
+      <Card>
+        <CardHeader className="gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex flex-col gap-1">
+            <CardTitle>Batch processing</CardTitle>
+            <CardDescription>Process many records in one run. Each one is still checked against role permissions and validation rules.</CardDescription>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Select value={policy} onValueChange={(v) => setPolicy(v as ConflictPolicy)}>
+              <SelectTrigger className="h-9 sm:w-60" aria-label="How to handle conflicts"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="skip">Conflicts: review individually</SelectItem>
+                <SelectItem value="zentra">Conflicts: keep Zentra version</SelectItem>
+                <SelectItem value="external">Conflicts: keep Bitrix24 version</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={run} disabled={chosen.length === 0}><Layers />{chosen.length ? `Process ${chosen.length} selected` : "Process selected"}</Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {items.length === 0 ? (
+            <EmptyState title="Nothing to process" description="Failed write-backs, sync conflicts, and rejected rows will appear here." />
+          ) : (
+            <div className="grid gap-1">
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl bg-muted px-3 py-2 text-xs font-medium text-muted-foreground">
+                <input type="checkbox" className="h-4 w-4 accent-[hsl(var(--primary))]" checked={allOn}
+                  onChange={() => setSelected(allOn ? new Set() : new Set(items.map((i) => `${i.kind}:${i.id}`)))} />
+                Select all ({items.length})
+              </label>
+              {items.map((i) => {
+                const key = `${i.kind}:${i.id}`;
+                return (
+                  <label key={key} className={cn("flex cursor-pointer items-start gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors duration-200 hover:bg-muted", selected.has(key) && "bg-primary/5")}>
+                    <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]" checked={selected.has(key)} onChange={() => toggle(key)} />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span className="font-medium">{i.label}</span>
+                        <span className="text-xs text-muted-foreground">{i.type}</span>
+                        <Badge variant={i.kind === "conflict" ? "warning" : i.kind === "writeback" ? "destructive" : "secondary"}>{KIND_LABEL[i.kind]}</Badge>
+                      </span>
+                      {i.issue && <span className="mt-0.5 block text-xs text-muted-foreground">{i.issue}</span>}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      {(last ?? batches[0]) && <BatchSummary run={(last ?? batches[0])!} />}
+    </div>
+  );
+}
+
 export function SyncPage() {
   const ops = useApp((s) => s.syncOps);
   const outage = useApp((s) => s.outage);
@@ -85,6 +219,7 @@ export function SyncPage() {
   const ops_mod = useApp((s) => s.modules.find((m) => m.id === "operations"));
   const syncNow = useSyncNowToast();
   const review = ops.filter((o) => o.status === "conflict" || o.status === "failed");
+  const batchCount = useBatchItems().length;
   const pending = ops.filter((o) => o.status === "pending").length;
 
   return (
@@ -126,6 +261,10 @@ export function SyncPage() {
             Needs review
             {review.length > 0 && <span className="rounded-full bg-warning/15 px-1.5 text-xs tabular text-warning">{review.length}</span>}
           </TabsTrigger>
+          <TabsTrigger value="batch">
+            <span>Batch<span className="hidden sm:inline"> processing</span></span>
+            {batchCount > 0 && <span className="rounded-full bg-muted-foreground/15 px-1.5 text-xs tabular">{batchCount}</span>}
+          </TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
         </TabsList>
         <TabsContent value="review" className="grid gap-4">
@@ -133,6 +272,7 @@ export function SyncPage() {
             <Card><EmptyState title="Everything is in sync" description="Conflicts and failed write-backs will appear here for review." /></Card>
           ) : review.map((op) => (op.status === "conflict" ? <ConflictCard key={op.id} op={op} /> : <FailedCard key={op.id} op={op} />))}
         </TabsContent>
+        <TabsContent value="batch"><BatchPanel /></TabsContent>
         <TabsContent value="history">
           <Card>
             <Table>
