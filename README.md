@@ -15,48 +15,61 @@ npm run build:single # one self-contained HTML file in dist-single/ (easy to sha
 
 ## Demo accounts
 
-Password for all three: `zentra2026`
+Password for all accounts: `zentra2026`. The sign-in page has one-click buttons for each.
 
-| Role | Email | Can do |
+| Account | Email | Does |
 |---|---|---|
-| Super Admin | superadmin@ifixz.com | Enable/disable accounts, assign Department Heads, audit log |
-| Department Head | depthead@ifixz.com | Modules, data pipeline, rejected records, sync center, backups, team access |
-| Department Employee | employee@ifixz.com | View/add/edit/archive records in modules they're granted |
+| Super Admin | superadmin@ifixz.com | Accounts, Department Heads, financial access, audit log |
+| Department Head | depthead@ifixz.com | Business overview, sync and batch processing, pipeline, registry, backups, team roles |
+| Accounting | jessa.accounting@ifixz.com | Credit checks and payments |
+| Purchasing | mark.purchasing@ifixz.com | Supplier POs |
+| Inventory | ana.inventory@ifixz.com | Inventory changes and receiving reports |
+| Invoicing | paolo.invoicing@ifixz.com | Sales invoices and written reports |
+| Delivery | lea.delivery@ifixz.com | Deliveries and delivery receipts |
 
-The login screen has one-click buttons for each account. Use **Reset demo data** in the user menu to start over.
+Use **Reset demo data** in the avatar menu to start over.
 
-## Suggested defense demo (Department Head)
+## User guide
 
-1. **Overview**: role-specific metrics, pipeline throughput, items that need attention.
-2. **Data pipeline → Run pipeline → Use the sample file**: watch ingest → staging → validate → transform → load. 7 rows load and 3 go to the **Rejected records** ledger instead of being dropped. Fix one and reload it.
-3. **Operations**: edit an order's stage. It saves in Zentra, then writes back to Bitrix24 (`Syncing` → `Synced`).
-4. **Conflict**: row menu → *Simulate Bitrix24 edit*, then edit the same order in Zentra. The write-back is held as a conflict in **Sync center**. Choose which version to keep.
-5. **Outage**: Sync center → *Simulate Bitrix24 outage*, then edit an order. It retries 3 times, then fails and appears for review. Operations shows the last synced data with a warning.
-6. **Sync now**: pulls new won deals from Bitrix24 through the pipeline (one has no customer and is rejected).
-7. **Module registry → Register module**: paste/keep the sample JSON manifest. Procurement appears in the sidebar immediately, no redeploy.
-8. **Team access**: set Jessa's Inventory access to *No access*, sign in as the employee, and see the module disappear and the URL blocked.
+**[docs/USER_GUIDE.md](docs/USER_GUIDE.md)** explains how to use Zentra:
 
-## RBAC
+- how an order moves from the won deal to payment, and which role owns each step
+- what each role sees and does
+- common tasks: order pages, batch processing, assigning roles, granting financial access
+- who can see and change what
+- a 10-minute demo script for presentations
+- troubleshooting
 
-Roles and permissions are defined in `src/lib/rbac.ts`. Every page is guarded (`<Guard perm="…">`), the sidebar only lists what a role can open, and employees have per-module access (`none`, `view`, `edit`) set by their Department Head.
+## Access control
+
+Roles, positions, and permissions are defined in `src/lib/rbac.ts`, and the order flow in `src/lib/orders.ts`.
+
+- Every page is guarded (`<Guard perm="…">`), and the sidebar lists only what a role can open.
+- Each Department Employee holds one Operations role (Accounting, Purchasing, Inventory, Invoicing, or Delivery). It decides their module access, the order steps they can perform, and whether they see amounts.
+- The store re-checks these rules on every action (`src/store/app-store.ts`), so hiding a button is never the only protection.
+
+In production, the Laravel API must apply the same rules, including leaving financial fields out of responses for roles without access.
 
 ## Stack
 
 React 18 + TypeScript, Vite, TanStack Router, Zustand (persisted to localStorage), Tailwind CSS, shadcn/ui components (Radix primitives), Recharts, lucide-react, Sonner.
 
-The proposed production stack (Chapter 3) uses TanStack Start on the frontend and Laravel + MySQL on the backend. This prototype keeps the same UI layer (React, TanStack, Zustand, Tailwind, shadcn/ui) so screens can be carried over.
+The proposed production stack (Chapter III of the paper) uses Next.js on the frontend and Laravel + MySQL on AWS RDS on the backend, with a Python ETL pipeline. This prototype uses the same UI layer (React, Zustand, Tailwind, shadcn/ui), so screens can be carried over.
 
 ## Project structure
 
 ```
 src/
   components/ui/     shadcn/ui components
-  components/app/    app shell, sidebar, guards, shared pieces
-  data/seed.ts       mock users, modules, records, runs, sync history
-  lib/rbac.ts        roles, permissions, module access
+  components/app/    app shell, sidebar, guards, shared pieces, module registration wizard
+  data/seed.ts       mock users, modules, orders with step histories, runs, sync history
+  lib/orders.ts      order flow: steps, responsible roles, actions, documents
+  lib/adapters.ts    adapter types, connection fields, module templates, rule generator
+  lib/rbac.ts        roles, Operations positions, permissions, financial access
   lib/validation.ts  ETL validate/transform stages and CSV parser
-  store/app-store.ts state and actions (pipeline, two-way sync, audit, BAM events)
-  pages/             one file per screen
+  store/app-store.ts state and actions (order steps, notifications, pipeline, two-way sync, batches, audit)
+  pages/             one file per screen (order-detail.tsx is the order page)
+docs/USER_GUIDE.md   how to use Zentra, by role, with a demo script
 ```
 
 All dates and times are shown in Philippine time (UTC+8).
