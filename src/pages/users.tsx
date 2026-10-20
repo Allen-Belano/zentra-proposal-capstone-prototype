@@ -73,6 +73,23 @@ function AdminUsers() {
   const { setUserStatus, setUserRole } = useApp.getState();
   const [q, setQ] = useState("");
   const list = users.filter((u) => `${u.name} ${u.email}`.toLowerCase().includes(q.toLowerCase()));
+  const roleControl = (u: User) => u.id === me.id || u.role === "super_admin" ? <Badge variant="secondary">{ROLE_LABEL[u.role]}</Badge> : (
+    <Select value={u.role} onValueChange={(v) => { setUserRole(u.id, v as Role); toast.success(`${u.name} is now a ${ROLE_LABEL[v as Role]}`); }}>
+      <SelectTrigger className="h-8 w-56" aria-label={`${u.name}'s role`}><SelectValue /></SelectTrigger>
+      <SelectContent>
+        <SelectItem value="dept_head">Department Head</SelectItem>
+        <SelectItem value="employee">Department Employee</SelectItem>
+      </SelectContent>
+    </Select>
+  );
+  const signInSwitch = (u: User) => (
+    <Switch
+      disabled={u.id === me.id}
+      checked={u.status === "active"}
+      onCheckedChange={(v) => { setUserStatus(u.id, v ? "active" : "disabled"); toast.success(v ? `${u.name} can sign in` : `${u.name}'s account is disabled`); }}
+      aria-label={`Allow ${u.name} to sign in`}
+    />
+  );
   return (
     <>
       <PageHeader title="Users and roles" description="Enable or disable accounts and assign Department Heads." />
@@ -84,48 +101,43 @@ function AdminUsers() {
           </div>
         </div>
         {list.length === 0 ? <EmptyState title="No matching users" /> : (
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>User</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead className="hidden md:table-cell">Department</TableHead>
-                <TableHead className="hidden lg:table-cell">Last active</TableHead>
-                <TableHead className="text-right">Can sign in</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {list.map((u) => {
-                const self = u.id === me.id;
-                return (
-                  <TableRow key={u.id} className={cn(u.status === "disabled" && "opacity-60")}>
-                    <TableCell><Person u={u} /></TableCell>
-                    <TableCell>
-                      {self || u.role === "super_admin" ? <Badge variant="secondary">{ROLE_LABEL[u.role]}</Badge> : (
-                        <Select value={u.role} onValueChange={(v) => { setUserRole(u.id, v as Role); toast.success(`${u.name} is now a ${ROLE_LABEL[v as Role]}`); }}>
-                          <SelectTrigger className="h-8 w-56"><SelectValue /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="dept_head">Department Head</SelectItem>
-                            <SelectItem value="employee">Department Employee</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      )}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">{u.department}</TableCell>
-                    <TableCell className="hidden text-muted-foreground lg:table-cell">{timeAgo(u.lastActiveAt)}</TableCell>
-                    <TableCell className="text-right">
-                      <Switch
-                        disabled={self}
-                        checked={u.status === "active"}
-                        onCheckedChange={(v) => { setUserStatus(u.id, v ? "active" : "disabled"); toast.success(v ? `${u.name} can sign in` : `${u.name}'s account is disabled`); }}
-                        aria-label={`Allow ${u.name} to sign in`}
-                      />
-                    </TableCell>
+          <>
+            <div className="hidden sm:block">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>User</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead className="hidden md:table-cell">Department</TableHead>
+                    <TableHead className="hidden lg:table-cell">Last active</TableHead>
+                    <TableHead className="text-right">Can sign in</TableHead>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+                </TableHeader>
+                <TableBody>
+                  {list.map((u) => (
+                    <TableRow key={u.id} className={cn(u.status === "disabled" && "opacity-60")}>
+                      <TableCell><Person u={u} /></TableCell>
+                      <TableCell>{roleControl(u)}</TableCell>
+                      <TableCell className="hidden md:table-cell">{u.department}</TableCell>
+                      <TableCell className="hidden text-muted-foreground lg:table-cell">{timeAgo(u.lastActiveAt)}</TableCell>
+                      <TableCell className="text-right">{signInSwitch(u)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <ul className="divide-y sm:hidden">
+              {list.map((u) => (
+                <li key={u.id} className={cn("grid gap-3 p-4", u.status === "disabled" && "opacity-60")}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0"><Person u={u} /></div>
+                    {signInSwitch(u)}
+                  </div>
+                  <div>{roleControl(u)}</div>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </Card>
       <PermissionMatrix />
