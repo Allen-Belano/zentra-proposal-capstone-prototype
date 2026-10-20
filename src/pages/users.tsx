@@ -10,8 +10,11 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState, PageHeader } from "@/components/app/bits";
 import { Forbidden } from "@/components/app/guard";
-import { can, PERMISSION_MATRIX, ROLE_LABEL, ROLE_SHORT_LABEL } from "@/lib/rbac";
-import type { ModuleAccess, Role, User } from "@/lib/types";
+import {
+  can, canViewFinancials, financialByPosition, moduleAccess, PERMISSION_MATRIX, POSITION_LABEL, POSITION_MATRIX, POSITIONS,
+  ROLE_LABEL, ROLE_SHORT_LABEL,
+} from "@/lib/rbac";
+import type { ModuleAccess, Position, Role, User } from "@/lib/types";
 import { cn, timeAgo } from "@/lib/utils";
 import { useApp, useMe } from "@/store/app-store";
 
@@ -70,7 +73,7 @@ function PermissionMatrix() {
 function AdminUsers() {
   const me = useMe()!;
   const users = useApp((s) => s.users);
-  const { setUserStatus, setUserRole } = useApp.getState();
+  const { setUserStatus, setUserRole, setFinancialAccess } = useApp.getState();
   const [q, setQ] = useState("");
   const list = users.filter((u) => `${u.name} ${u.email}`.toLowerCase().includes(q.toLowerCase()));
   const roleControl = (u: User) => u.id === me.id || u.role === "super_admin" ? <Badge variant="secondary">{ROLE_LABEL[u.role]}</Badge> : (
@@ -90,9 +93,21 @@ function AdminUsers() {
       aria-label={`Allow ${u.name} to sign in`}
     />
   );
+  const moneyControl = (u: User) => {
+    if (u.role !== "employee") return <Badge variant="secondary">Full access</Badge>;
+    if (financialByPosition(u)) return <Badge variant="secondary">By role</Badge>;
+    return (
+      <Switch
+        checked={!!u.financialAccess}
+        onCheckedChange={(v) => { const r = setFinancialAccess(u.id, v); if (r.ok) toast.success(v ? `${u.name} can now see amounts` : `${u.name} can no longer see amounts`); }}
+        aria-label={`Let ${u.name} see financial data`}
+      />
+    );
+  };
+  const position = (u: User) => (u.role === "employee" ? (u.position ? POSITION_LABEL[u.position] : "Unassigned") : "—");
   return (
     <>
-      <PageHeader title="Users and roles" description="Enable or disable accounts and assign Department Heads." />
+      <PageHeader title="Users and roles" description="Enable or disable accounts, assign Department Heads, and grant access to financial data." />
       <Card>
         <div className="border-b p-4">
           <div className="relative max-w-sm">
@@ -108,8 +123,9 @@ function AdminUsers() {
                   <TableRow className="hover:bg-transparent">
                     <TableHead>User</TableHead>
                     <TableHead>Role</TableHead>
-                    <TableHead className="hidden md:table-cell">Department</TableHead>
-                    <TableHead className="hidden lg:table-cell">Last active</TableHead>
+                    <TableHead className="hidden md:table-cell">Operations role</TableHead>
+                    <TableHead className="hidden 2xl:table-cell">Last active</TableHead>
+                    <TableHead>Financial data</TableHead>
                     <TableHead className="text-right">Can sign in</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -118,8 +134,9 @@ function AdminUsers() {
                     <TableRow key={u.id} className={cn(u.status === "disabled" && "opacity-60")}>
                       <TableCell><Person u={u} /></TableCell>
                       <TableCell>{roleControl(u)}</TableCell>
-                      <TableCell className="hidden md:table-cell">{u.department}</TableCell>
-                      <TableCell className="hidden text-muted-foreground lg:table-cell">{timeAgo(u.lastActiveAt)}</TableCell>
+                      <TableCell className="hidden md:table-cell">{position(u)}</TableCell>
+                      <TableCell className="hidden text-muted-foreground 2xl:table-cell">{timeAgo(u.lastActiveAt)}</TableCell>
+                      <TableCell>{moneyControl(u)}</TableCell>
                       <TableCell className="text-right">{signInSwitch(u)}</TableCell>
                     </TableRow>
                   ))}
@@ -134,6 +151,10 @@ function AdminUsers() {
                     {signInSwitch(u)}
                   </div>
                   <div>{roleControl(u)}</div>
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="text-muted-foreground">{position(u)} · financial data</span>
+                    {moneyControl(u)}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -145,17 +166,75 @@ function AdminUsers() {
   );
 }
 
+function PositionMatrix() {
+  return (
+    <Card className="mt-6">
+      <CardHeader>
+        <CardTitle>What each Operations role can do</CardTitle>
+        <CardDescription>The assigned role decides an employee's modules, data, and actions. Salaries and other financial records stay restricted.</CardDescription>
+      </CardHeader>
+      <CardContent className="p-0">
+        {/* Five role columns don't fit a phone, so phones list the allowed roles under each permission. */}
+        <ul className="divide-y px-5 pb-4 sm:hidden">
+          {POSITION_MATRIX.map((row) => (
+            <li key={row.label} className="py-3">
+              <p className="text-sm">{row.label}</p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {row.positions.map((p) => <span key={p} className="rounded-full bg-success/10 px-2.5 py-0.5 text-xs text-success">{POSITION_LABEL[p]}</span>)}
+              </div>
+            </li>
+          ))}
+        </ul>
+        <div className="hidden sm:block">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="pl-5">Permission</TableHead>
+              {POSITIONS.map((p) => <TableHead key={p} className="px-1.5 text-center sm:px-3">{POSITION_LABEL[p]}</TableHead>)}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {POSITION_MATRIX.map((row) => (
+              <TableRow key={row.label}>
+                <TableCell className="pl-5">{row.label}</TableCell>
+                {POSITIONS.map((p) => (
+                  <TableCell key={p} className="px-1.5 text-center sm:px-3">
+                    {row.positions.includes(p) ? <Check className="mx-auto h-4 w-4 text-success" aria-label="Allowed" /> : <Minus className="mx-auto h-4 w-4 text-muted-foreground/50" aria-label="Not allowed" />}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function TeamAccess() {
   const me = useMe()!;
   const users = useApp((s) => s.users);
-  const modules = useApp((s) => s.modules.filter((m) => m.active));
-  const setModuleAccess = useApp((s) => s.setModuleAccess);
+  // Baseline modules follow the role; only modules registered later need a per-person grant.
+  const extraModules = useApp((s) => s.modules.filter((m) => m.active && !m.baseline));
+  const { setModuleAccess, setUserPosition } = useApp.getState();
   const team = users.filter((u) => u.role === "employee" && u.department === me.department);
-  const accessSelect = (u: User, m: { id: string; name: string }) => (
+
+  const positionSelect = (u: User) => (
     <Select
-      value={u.moduleAccess[m.id] ?? "none"}
-      onValueChange={(v) => { setModuleAccess(u.id, m.id, v as ModuleAccess); toast.success(`${u.name}: ${m.name} access updated`); }}
+      value={u.position ?? ""}
+      onValueChange={(v) => {
+        const r = setUserPosition(u.id, v as Position);
+        if (r.ok) toast.success(`${u.name} is now in ${POSITION_LABEL[v as Position]}`);
+        else toast.error(r.errors?.[0] ?? "Couldn't change the role");
+      }}
     >
+      <SelectTrigger className="h-8 w-40" aria-label={`${u.name}'s Operations role`}><SelectValue placeholder="Choose a role" /></SelectTrigger>
+      <SelectContent>{POSITIONS.map((p) => <SelectItem key={p} value={p}>{POSITION_LABEL[p]}</SelectItem>)}</SelectContent>
+    </Select>
+  );
+  const accessSelect = (u: User, m: { id: string; name: string }) => (
+    <Select value={u.moduleAccess[m.id] ?? "none"} onValueChange={(v) => { setModuleAccess(u.id, m.id, v as ModuleAccess); toast.success(`${u.name}: ${m.name} access updated`); }}>
       <SelectTrigger className="h-8 w-32" aria-label={`${u.name} access to ${m.name}`}><SelectValue /></SelectTrigger>
       <SelectContent>
         <SelectItem value="none">No access</SelectItem>
@@ -164,9 +243,15 @@ function TeamAccess() {
       </SelectContent>
     </Select>
   );
+  const yesNo = (on: boolean, label: string) => (
+    <span className={cn("inline-flex items-center gap-1.5 text-xs", on ? "text-success" : "text-muted-foreground")}>
+      {on ? <Check className="h-3.5 w-3.5" /> : <Minus className="h-3.5 w-3.5" />}{label}
+    </span>
+  );
+
   return (
     <>
-      <PageHeader title="Team access" description={`Choose which modules each ${me.department} employee can view or edit. Changes apply right away.`} />
+      <PageHeader title="Team access" description={`Assign each ${me.department} employee one Operations role. The role decides which modules, data, and actions they can use.`} />
       <Card>
         {team.length === 0 ? <EmptyState title="No employees in your department" /> : (
           <>
@@ -175,7 +260,10 @@ function TeamAccess() {
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
                     <TableHead>Employee</TableHead>
-                    {modules.map((m) => <TableHead key={m.id}>{m.name}</TableHead>)}
+                    <TableHead>Role / position</TableHead>
+                    <TableHead className="hidden lg:table-cell">Inventory</TableHead>
+                    <TableHead className="hidden lg:table-cell">Amounts and costs</TableHead>
+                    {extraModules.map((m) => <TableHead key={m.id}>{m.name}</TableHead>)}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -185,7 +273,10 @@ function TeamAccess() {
                         <Person u={u} />
                         {u.status === "disabled" && <Badge variant="secondary" className="mt-1">Disabled</Badge>}
                       </TableCell>
-                      {modules.map((m) => <TableCell key={m.id}>{accessSelect(u, m)}</TableCell>)}
+                      <TableCell>{positionSelect(u)}</TableCell>
+                      <TableCell className="hidden lg:table-cell">{yesNo(moduleAccess(u, "ims") === "edit", moduleAccess(u, "ims") === "edit" ? "Can edit" : "View only")}</TableCell>
+                      <TableCell className="hidden lg:table-cell">{yesNo(canViewFinancials(u), canViewFinancials(u) ? "Visible" : "Hidden")}</TableCell>
+                      {extraModules.map((m) => <TableCell key={m.id}>{accessSelect(u, m)}</TableCell>)}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -193,23 +284,29 @@ function TeamAccess() {
             </div>
             <ul className="divide-y sm:hidden">
               {team.map((u) => (
-                <li key={u.id} className={cn("p-4", u.status === "disabled" && "opacity-60")}>
+                <li key={u.id} className={cn("grid gap-3 p-4", u.status === "disabled" && "opacity-60")}>
                   <Person u={u} />
-                  {u.status === "disabled" && <Badge variant="secondary" className="mt-2">Disabled</Badge>}
-                  <div className="mt-3 grid gap-2">
-                    {modules.map((m) => (
-                      <div key={m.id} className="flex items-center justify-between gap-3">
-                        <span className="text-sm text-muted-foreground">{m.name}</span>
-                        {accessSelect(u, m)}
-                      </div>
-                    ))}
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-muted-foreground">Role</span>
+                    {positionSelect(u)}
                   </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1">
+                    {yesNo(moduleAccess(u, "ims") === "edit", moduleAccess(u, "ims") === "edit" ? "Edits inventory" : "Views inventory")}
+                    {yesNo(canViewFinancials(u), canViewFinancials(u) ? "Sees amounts" : "Amounts hidden")}
+                  </div>
+                  {extraModules.map((m) => (
+                    <div key={m.id} className="flex items-center justify-between gap-3">
+                      <span className="text-sm text-muted-foreground">{m.name}</span>
+                      {accessSelect(u, m)}
+                    </div>
+                  ))}
                 </li>
               ))}
             </ul>
           </>
         )}
       </Card>
+      <PositionMatrix />
       <PermissionMatrix />
     </>
   );
