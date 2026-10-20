@@ -1,0 +1,74 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 20% 98%;
+    --foreground: 216 30% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 216 30% 12%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 216 30% 12%;
+    --primary: 198 96% 43%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 214 22% 94%;
+    --secondary-foreground: 216 30% 14%;
+    --muted: 214 22% 95%;
+    --muted-foreground: 215 14% 42%;
+    --accent: 214 24% 94%;
+    --accent-foreground: 216 30% 14%;
+    --destructive: 358 70% 52%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 62% 36%;
+    --warning: 36 92% 44%;
+    --border: 214 20% 89%;
+    --input: 214 20% 86%;
+    --ring: 198 96% 43%;
+    --sidebar: 0 0% 100%;
+    --sidebar-border: 214 20% 90%;
+    --radius: 0.6rem;
+  }
+  .dark {
+    --background: 216 30% 8%;
+    --foreground: 210 20% 94%;
+    --card: 216 28% 10.5%;
+    --card-foreground: 210 20% 94%;
+    --popover: 216 28% 11%;
+    --popover-foreground: 210 20% 94%;
+    --primary: 198 96% 46%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 215 24% 15%;
+    --secondary-foreground: 210 20% 94%;
+    --muted: 215 24% 14%;
+    --muted-foreground: 214 14% 62%;
+    --accent: 215 24% 15.5%;
+    --accent-foreground: 210 20% 94%;
+    --destructive: 358 75% 59%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 55% 45%;
+    --warning: 40 90% 52%;
+    --border: 215 22% 18%;
+    --input: 215 22% 21%;
+    --ring: 198 96% 46%;
+    --sidebar: 217 32% 6.5%;
+    --sidebar-border: 215 24% 14%;
+    color-scheme: dark;
+  }
+  * { @apply border-border; }
+  html, body, #root { height: 100%; }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01";
+  }
+  :focus-visible { @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+}
+
+@layer utilities {
+  .tabular { font-variant-numeric: tabular-nums; }
+  .safe-top { padding-top: env(safe-area-inset-top, 0px); }
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+}

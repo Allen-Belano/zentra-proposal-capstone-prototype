@@ -1,0 +1,219 @@
+import { useMemo, useState } from "react";
+import { useParams } from "@tanstack/react-router";
+import { Archive, ArchiveRestore, CloudOff, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Zap } from "lucide-react";
+import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useSyncNowToast } from "@/components/app/app-shell";
+import { EmptyState, PageHeader, SyncBadge } from "@/components/app/bits";
+import { Forbidden } from "@/components/app/guard";
+import { RecordForm } from "@/components/app/record-form";
+import { can, moduleAccess } from "@/lib/rbac";
+import type { ModuleField, RecordItem } from "@/lib/types";
+import { cn, formatDate, formatPeso, timeAgo } from "@/lib/utils";
+import { useApp, useMe } from "@/store/app-store";
+
+const hideCls = (f: ModuleField) =>
+  cn(f.hideOnTablet ? "hidden xl:table-cell" : f.hideOnMobile && "hidden md:table-cell");
+
+function Cell({ field, rec }: { field: ModuleField; rec: RecordItem }) {
+  const v = rec.data[field.key];
+  if (v === "" || v === undefined) return <span className="text-muted-foreground">—</span>;
+  if (field.type === "currency") return <span className="tabular">{formatPeso(Number(v))}</span>;
+  if (field.type === "date") return <span className="whitespace-nowrap">{formatDate(String(v))}</span>;
+  if (field.key === "on_hand") {
+    const low = Number(v) <= Number(rec.data.reorder_level);
+    return (
+      <span className="flex items-center gap-2 tabular">
+        {String(v)}
+        {low && <Badge variant="warning">Low</Badge>}
+      </span>
+    );
+  }
+  if (field.key === "stage") return <Badge variant={v === "Delivered" ? "success" : "secondary"}>{String(v)}</Badge>;
+  if (field.type === "number") return <span className="tabular">{String(v)}</span>;
+  return <span className={cn("block max-w-[16rem] truncate whitespace-nowrap", field.primary && "font-medium")} title={String(v)}>{String(v)}</span>;
+}
+
+export function RecordsPage() {
+  const { moduleId } = useParams({ strict: false }) as { moduleId: string };
+  const me = useMe();
+  const mod = useApp((s) => s.modules.find((m) => m.id === moduleId));
+  const allRecords = useApp((s) => s.records);
+  const outage = useApp((s) => s.outage);
+  const { addRecord, updateRecord, setArchived, simulateRemoteEdit } = useApp.getState();
+  const syncNow = useSyncNowToast();
+
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("all");
+  const [view, setView] = useState<"active" | "archived">("active");
+  const [editing, setEditing] = useState<RecordItem | null>(null);
+  const [creating, setCreating] = useState(false);
+
+  const filterField = mod?.fields.find((f) => f.type === "select");
+  const records = useMemo(() => {
+    if (!mod) return [];
+    const q = query.trim().toLowerCase();
+    return allRecords
+      .filter((r) => r.moduleId === mod.id && (view === "archived" ? r.archived : !r.archived))
+      .filter((r) => (filter === "all" || !filterField ? true : r.data[filterField.key] === filter))
+      .filter((r) => !q || Object.values(r.data).some((v) => String(v).toLowerCase().includes(q)));
+  }, [allRecords, mod, query, filter, filterField, view]);
+
+  const access = moduleAccess(me, moduleId);
+  if (!mod || !mod.active) return <Forbidden message="This module doesn't exist or has been deactivated by a Department Head." />;
+  if (access === "none") return <Forbidden />;
+  const canEdit = access === "edit";
+  const isHead = can(me, "sync.manage");
+  const external = mod.kind === "external";
+
+  return (
+    <>
+      <PageHeader
+        title={mod.name}
+        description={external ? `${mod.description} Changes made here are written back to ${mod.source}.` : mod.description}
+        actions={
+          <>
+            {external && (
+              <Button variant="outline" onClick={() => syncNow(mod.id)}><RefreshCw />Sync now</Button>
+            )}
+            {canEdit && <Button onClick={() => setCreating(true)}><Plus />Add {mod.recordName.toLowerCase()}</Button>}
+          </>
+        }
+      />
+
+      {external && outage && (
+        <div className="mb-4 flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm">
+          <CloudOff className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
+          <div>
+            <p className="font-medium">{mod.source} is unreachable</p>
+            <p className="text-muted-foreground">
+              Showing the last synced data{mod.lastSyncedAt ? ` from ${timeAgo(mod.lastSyncedAt)}` : ""}. Edits are saved in Zentra and retried automatically.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <Card>
+        <div className="flex flex-col gap-3 border-b p-4 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search ${mod.name.toLowerCase()}`} className="pl-9" />
+          </div>
+          <div className="flex gap-2">
+            {filterField?.options && (
+              <Select value={filter} onValueChange={setFilter}>
+                <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All {filterField.label.toLowerCase()}s</SelectItem>
+                  {filterField.options.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            )}
+            <Select value={view} onValueChange={(v) => setView(v as "active" | "archived")}>
+              <SelectTrigger className="w-full sm:w-32"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="archived">Archived</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        {records.length === 0 ? (
+          <EmptyState
+            title={query || filter !== "all" ? "No matching records" : view === "archived" ? "No archived records" : `No ${mod.recordName.toLowerCase()}s yet`}
+            description={query || filter !== "all" ? "Try a different search or filter." : canEdit && view === "active" ? `Add the first ${mod.recordName.toLowerCase()} or import a file through the data pipeline.` : undefined}
+          />
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                {mod.fields.map((f) => (
+                  <TableHead key={f.key} className={hideCls(f)}>{f.label}</TableHead>
+                ))}
+                {external && <TableHead>Sync</TableHead>}
+                <TableHead className="hidden xl:table-cell">Updated</TableHead>
+                <TableHead className="w-10"><span className="sr-only">Actions</span></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {records.map((r) => (
+                <TableRow key={r.id}>
+                  {mod.fields.map((f) => (
+                    <TableCell key={f.key} className={hideCls(f)}><Cell field={f} rec={r} /></TableCell>
+                  ))}
+                  {external && <TableCell><SyncBadge state={r.syncState} /></TableCell>}
+                  <TableCell className="hidden whitespace-nowrap text-muted-foreground xl:table-cell">
+                    <div className="text-sm">{timeAgo(r.updatedAt)}</div>
+                    <div className="text-xs">{r.updatedBy}</div>
+                  </TableCell>
+                  <TableCell>
+                    {canEdit && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" aria-label="Record actions"><MoreHorizontal /></Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {!r.archived && <DropdownMenuItem onSelect={() => setEditing(r)}><Pencil />Edit</DropdownMenuItem>}
+                          <DropdownMenuItem onSelect={() => { setArchived(r.id, !r.archived); toast.success(r.archived ? "Record restored" : "Record archived"); }}>
+                            {r.archived ? <><ArchiveRestore />Restore</> : <><Archive />Archive</>}
+                          </DropdownMenuItem>
+                          {external && isHead && !r.archived && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onSelect={() => { simulateRemoteEdit(r.id); toast("Changed in Bitrix24", { description: "Edit this order in Zentra now to trigger a conflict, or press Sync now to pull the change." }); }}>
+                                <Zap />Simulate Bitrix24 edit
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+        <div className="border-t px-4 py-3 text-xs text-muted-foreground">
+          {records.length} {mod.recordName.toLowerCase()}{records.length === 1 ? "" : "s"}
+          {external && mod.lastSyncedAt && <> · Last synced with {mod.source} {timeAgo(mod.lastSyncedAt)}</>}
+        </div>
+      </Card>
+
+      <RecordForm
+        open={creating}
+        onOpenChange={setCreating}
+        module={mod}
+        title={`Add ${mod.recordName.toLowerCase()}`}
+        description="Every entry is checked against this module's validation rules before it's saved."
+        submitLabel={`Add ${mod.recordName.toLowerCase()}`}
+        onSubmit={(data) => {
+          const r = addRecord(mod.id, data);
+          if (r.ok) { setCreating(false); toast.success(`${mod.recordName} added`, { description: external ? `Writing back to ${mod.source}…` : undefined }); }
+          return r;
+        }}
+      />
+      <RecordForm
+        open={!!editing}
+        onOpenChange={(o) => !o && setEditing(null)}
+        module={mod}
+        initial={editing?.data}
+        title={`Edit ${mod.recordName.toLowerCase()}`}
+        description={external ? `Saved in Zentra first, then written back to ${mod.source}.` : undefined}
+        submitLabel="Save changes"
+        onSubmit={(data) => {
+          const r = updateRecord(editing!.id, data);
+          if (r.ok) { setEditing(null); toast.success("Changes saved", { description: external ? `Writing back to ${mod.source}…` : undefined }); }
+          return r;
+        }}
+      />
+    </>
+  );
+}
