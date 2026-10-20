@@ -10,7 +10,7 @@ import type { ModuleDef } from "@/lib/types";
 type Row = Record<string, string | number>;
 
 export function RecordForm({
-  open, onOpenChange, module, initial, title, description, submitLabel, onSubmit, initialErrors,
+  open, onOpenChange, module, initial, title, description, submitLabel, onSubmit, initialErrors, hiddenFields = [],
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -21,6 +21,8 @@ export function RecordForm({
   submitLabel: string;
   onSubmit: (data: Row) => { ok: boolean; errors?: string[] };
   initialErrors?: string[];
+  /** Fields the user isn't allowed to see; they keep their stored values. */
+  hiddenFields?: string[];
 }) {
   const [values, setValues] = useState<Row>({});
   const [errors, setErrors] = useState<string[]>([]);
@@ -56,7 +58,7 @@ export function RecordForm({
             </div>
           )}
           <div className="grid gap-4 sm:grid-cols-2">
-            {module.fields.map((f) => (
+            {module.fields.filter((f) => !hiddenFields.includes(f.key)).map((f) => (
               <div key={f.key} className="grid gap-2">
                 <Label htmlFor={`f-${f.key}`}>{f.label}</Label>
                 {f.type === "select" && f.options ? (
