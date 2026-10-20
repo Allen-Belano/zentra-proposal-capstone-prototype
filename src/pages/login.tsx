@@ -86,7 +86,7 @@ export function LoginPage() {
         <p className="mt-auto pt-10 text-xs text-slate-500">iFixz Enterprise Co. · Capstone prototype by Aether</p>
       </section>
 
-      <section className="safe-top flex items-center justify-center px-5 py-10 sm:px-10">
+      <section className="safe-top flex min-w-0 items-center justify-center px-5 py-10 sm:px-10">
         <div className="w-full max-w-sm">
           <ZentraLogo className="mb-8 lg:hidden" />
           <h2 className="text-2xl font-semibold tracking-tight">Sign in</h2>
