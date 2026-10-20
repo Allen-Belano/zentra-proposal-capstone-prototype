@@ -325,10 +325,10 @@ export function PipelinePage() {
         <TabsList>
           <TabsTrigger value="runs">Runs</TabsTrigger>
           <TabsTrigger value="rejected">
-            Rejected records
+            <span>Rejected<span className="hidden sm:inline"> records</span></span>
             {openRejected > 0 && <span className="rounded-full bg-warning/15 px-1.5 text-xs tabular text-warning">{openRejected}</span>}
           </TabsTrigger>
-          <TabsTrigger value="rules">Validation rules</TabsTrigger>
+          <TabsTrigger value="rules"><span className="sm:hidden">Rules</span><span className="hidden sm:inline">Validation rules</span></TabsTrigger>
         </TabsList>
         <TabsContent value="runs">
           <Card>
