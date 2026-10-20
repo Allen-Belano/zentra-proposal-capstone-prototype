@@ -38,7 +38,7 @@ export interface ModuleField {
 }
 
 export type AdapterType = "native" | "api" | "database" | "webhook" | "file";
-export type SyncFrequency = "realtime" | "hourly" | "daily";
+export type SyncFrequency = "realtime" | "every_15_min" | "hourly" | "daily" | "weekly";
 
 export interface ModuleDef {
   id: string;
@@ -48,7 +48,17 @@ export interface ModuleDef {
   icon: string;
   kind: "native" | "external";
   source?: string;
-  adapter: { type: AdapterType; endpoint?: string; frequency: SyncFrequency };
+  /** Team responsible for the module, so issues have an owner. */
+  owner?: string;
+  adapter: {
+    type: AdapterType;
+    endpoint?: string;
+    frequency: SyncFrequency;
+    /** Adapter connection settings (sample values only in the prototype). */
+    connection?: Record<string, string>;
+    /** Zentra field key → column or property in the source system. */
+    mapping?: Record<string, string>;
+  };
   active: boolean;
   baseline?: boolean;
   fields: ModuleField[];
