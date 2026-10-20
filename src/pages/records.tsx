@@ -110,7 +110,7 @@ export function RecordsPage() {
               <Select value={filter} onValueChange={setFilter}>
                 <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All {filterField.label.toLowerCase()}s</SelectItem>
+                  <SelectItem value="all">All {filterField.label.toLowerCase().replace(/y$/, "ie")}s</SelectItem>
                   {filterField.options.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
                 </SelectContent>
               </Select>
