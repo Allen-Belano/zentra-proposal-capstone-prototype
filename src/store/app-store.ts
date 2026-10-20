@@ -1,10 +1,13 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { makeSeed } from "@/data/seed";
+import { actionOwner, actionsFor, ORDER_ACTIONS, type OrderStage } from "@/lib/orders";
+import { can, canActAs, canViewFinancials, moduleAccess, POSITION_LABEL } from "@/lib/rbac";
 import { recordLabel, transformRow, validateRow } from "@/lib/validation";
 import type {
-  ActivityEvent, AuditEntry, Backup, EventLevel, ModuleAccess, ModuleDef, PipelineRun, RecordItem,
-  RejectedRow, RemoteRecord, Role, SyncFrequency, SyncOperation, User, ValidationRule,
+  ActivityEvent, AppNotification, AuditEntry, Backup, BatchItemKind, BatchOutcome, BatchRun, EventLevel, ModuleAccess,
+  ModuleDef, OrderDocs, OrderLogEntry, PipelineRun, Position, RecordItem, RejectedRow, RemoteRecord, Role, SyncFrequency,
+  SyncOperation, User, ValidationRule,
 } from "@/lib/types";
 import { uid } from "@/lib/utils";
 
@@ -13,6 +16,17 @@ type Row = Record<string, string | number>;
 export type BackupSchedule = "every_4_hours" | "daily" | "weekly";
 
 interface Result { ok: boolean; errors?: string[] }
+export type ConflictPolicy = "skip" | "zentra" | "external";
+
+/** Who gets told when an order arrives at a stage, and what they read. */
+const ARRIVAL: Partial<Record<OrderStage, { to: AppNotification["to"]; title: (no: string) => string }>> = {
+  "On hold": { to: { role: "dept_head" }, title: (no) => `${no} is on hold` },
+  Purchasing: { to: { position: "purchasing" }, title: (no) => `${no} is ready for purchasing` },
+  Receiving: { to: { position: "inventory" }, title: (no) => `${no} is waiting for a supplier delivery` },
+  Invoicing: { to: { position: "invoicing" }, title: (no) => `${no} is ready for invoicing` },
+  Delivery: { to: { position: "delivery" }, title: (no) => `${no} is ready for delivery` },
+  Collection: { to: { position: "accounting" }, title: (no) => `${no} was delivered unpaid` },
+};
 
 interface AppState extends Omit<Seed, "backupSchedule"> {
   sessionUserId: string | null;
@@ -24,7 +38,8 @@ interface AppState extends Omit<Seed, "backupSchedule"> {
 
   addRecord: (moduleId: string, data: Row) => Result;
   updateRecord: (recordId: string, data: Row) => Result;
-  setArchived: (recordId: string, archived: boolean) => void;
+  setArchived: (recordId: string, archived: boolean) => Result;
+  advanceOrder: (recordId: string, actionId: string, docs: Partial<Record<keyof OrderDocs, string>>) => Result;
 
   runPipeline: (moduleId: string, source: string, rows: Row[]) => PipelineRun;
   reloadRejected: (rowId: string, data: Row) => Result;
@@ -34,6 +49,7 @@ interface AppState extends Omit<Seed, "backupSchedule"> {
   simulateRemoteEdit: (recordId: string) => void;
   resolveConflict: (opId: string, keep: "zentra" | "external") => void;
   retrySync: (opId: string) => void;
+  batchProcess: (items: { kind: BatchItemKind; id: string }[], conflictPolicy: ConflictPolicy) => BatchRun | null;
   setOutage: (on: boolean) => void;
 
   toggleRule: (ruleId: string) => void;
@@ -47,6 +63,11 @@ interface AppState extends Omit<Seed, "backupSchedule"> {
   setUserStatus: (userId: string, status: User["status"]) => void;
   setUserRole: (userId: string, role: Role) => void;
   setModuleAccess: (userId: string, moduleId: string, access: ModuleAccess) => void;
+  setUserPosition: (userId: string, position: Position) => Result;
+  setFinancialAccess: (userId: string, on: boolean) => Result;
+
+  markNotificationRead: (id: string) => void;
+  markAllNotificationsRead: () => void;
 
   createBackup: () => void;
   testRestore: (backupId: string) => void;
@@ -71,6 +92,26 @@ export const useApp = create<AppState>()(
       const event = (e: Omit<ActivityEvent, "id" | "at" | "actor"> & { actor?: string }) => {
         const full: ActivityEvent = { id: uid("e-"), at: now(), actor: e.actor ?? actorName(), ...e };
         set((s) => ({ activity: [full, ...s.activity].slice(0, 300) }));
+      };
+
+      const notify = (to: AppNotification["to"], title: string, detail?: string, orderId?: string) => {
+        const n: AppNotification = { id: uid("n-"), to, title, detail, orderId, at: now(), readBy: [] };
+        set((s) => ({ notifications: [n, ...s.notifications].slice(0, 200) }));
+      };
+
+      /** Role checks happen here as well as in the UI, so a hidden button is never the only guard. */
+      const denied = (moduleId: string): Result | null => {
+        const m = mod(moduleId);
+        return moduleAccess(me(), moduleId) === "edit" ? null : { ok: false, errors: [`Your role can view ${m.name} but can't change it.`] };
+      };
+
+      const logEntry = (stage: string, description: string, by?: User | string): OrderLogEntry => {
+        const u = typeof by === "string" || by === undefined ? undefined : by;
+        return {
+          id: uid("log-"), stage, description, at: now(),
+          by: u ? u.name : (typeof by === "string" ? by : actorName()),
+          position: u?.position, role: u ? u.role : "system",
+        };
       };
 
       const mod = (id: string) => get().modules.find((m) => m.id === id)!;
@@ -99,6 +140,7 @@ export const useApp = create<AppState>()(
             patchOp(opId, { status: "failed", attempts: 3, error: "Bitrix24 didn't respond after 3 attempts (timeout)." });
             patchRecord(recordId, { syncState: "failed" });
             event({ moduleId: rec.moduleId, recordId, title: `Write-back failed for ${label}`, detail: "Bitrix24 didn't respond after 3 attempts.", level: "error", actor: "System" });
+            notify({ role: "dept_head" }, `Write-back failed for ${label}`, "Bitrix24 didn't respond after 3 attempts", recordId);
             return;
           }
           const remote = s.remote[recordId];
@@ -106,6 +148,7 @@ export const useApp = create<AppState>()(
             patchOp(opId, { status: "conflict", attempts: attempt, error: "The order changed in Bitrix24 after Zentra's last sync.", local: { ...rec.data }, remote: { ...remote.data } });
             patchRecord(recordId, { syncState: "conflict" });
             event({ moduleId: rec.moduleId, recordId, title: `Sync conflict on ${label}`, detail: "Changed in both Zentra and Bitrix24. Waiting for review.", level: "warning", actor: "System" });
+            notify({ role: "dept_head" }, `Sync conflict on ${label}`, "Changed in both Zentra and Bitrix24", recordId);
             return;
           }
           const version = (remote?.version ?? 0) + 1;
@@ -129,13 +172,25 @@ export const useApp = create<AppState>()(
         pushOutbound(rec.id, op.id);
       };
 
-      const load = (moduleId: string, data: Row): RecordItem => {
+      const load = (moduleId: string, data: Row, source?: string): RecordItem => {
         const m = mod(moduleId);
+        const clean = transformRow(m, data);
         const rec: RecordItem = {
-          id: uid(`${moduleId}-`), moduleId, data: transformRow(m, data), archived: false,
+          id: uid(`${moduleId}-`), moduleId, data: clean, archived: false,
           syncState: m.kind === "external" ? "pending" : "local",
           createdAt: now(), updatedAt: now(), updatedBy: actorName(),
         };
+        if (moduleId === "operations") {
+          const fromBitrix = source?.startsWith("Bitrix24");
+          const description = fromBitrix ? "Deal won in Bitrix24; order created in Zentra"
+            : source ? `Order imported from ${source}` : "Order created in Zentra";
+          rec.order = {
+            docs: { clientPo: String(clean.client_po || "") || undefined },
+            log: [logEntry(String(clean.stage), description, fromBitrix ? "Bitrix24" : me())],
+          };
+          const no = String(clean.order_no);
+          notify({ position: "accounting" }, `${no} needs a credit check`, `New order from ${clean.customer || "a client"}`, rec.id);
+        }
         set((s) => ({ records: [rec, ...s.records] }));
         return rec;
       };
@@ -159,6 +214,8 @@ export const useApp = create<AppState>()(
         resetDemo: () => set({ ...makeSeed(), sessionUserId: get().sessionUserId }),
 
         addRecord: (moduleId, data) => {
+          const block = denied(moduleId);
+          if (block) return block;
           const m = mod(moduleId);
           const errors = validateRow(m, get().rules, data, get().records);
           if (errors.length) return { ok: false, errors };
@@ -172,19 +229,28 @@ export const useApp = create<AppState>()(
 
         updateRecord: (recordId, data) => {
           const rec = get().records.find((r) => r.id === recordId)!;
+          const block = denied(rec.moduleId);
+          if (block) return block;
           const m = mod(rec.moduleId);
-          const errors = validateRow(m, get().rules, data, get().records, recordId);
+          // Fields the user can't see keep their stored values instead of being blanked.
+          const merged = { ...data };
+          if (!canViewFinancials(me())) for (const f of m.fields) if (f.financial) merged[f.key] = rec.data[f.key];
+          const errors = validateRow(m, get().rules, merged, get().records, recordId);
           if (errors.length) return { ok: false, errors };
-          const next = transformRow(m, data);
-          const updated = { ...rec, data: next, updatedAt: now(), updatedBy: actorName() };
+          const next = transformRow(m, merged);
+          const stageChanged = rec.data.stage !== undefined && rec.data.stage !== next.stage;
+          const paymentChanged = rec.data.payment !== undefined && rec.data.payment !== next.payment;
+          const notes = [
+            stageChanged && `step changed from ${rec.data.stage} to ${next.stage}`,
+            paymentChanged && `payment marked ${next.payment}`,
+          ].filter(Boolean);
+          const order = rec.order && notes.length
+            ? { ...rec.order, log: [...rec.order.log, logEntry(String(rec.data.stage), `Order details edited: ${notes.join(", ")}`, me())] }
+            : rec.order;
+          const updated = { ...rec, data: next, order, updatedAt: now(), updatedBy: actorName() };
           patchRecord(recordId, updated);
           const label = recordLabel(m, next);
-          const stageChanged = rec.data.stage !== undefined && rec.data.stage !== next.stage;
-          event({
-            moduleId: m.id, recordId,
-            title: stageChanged ? `${label} moved to ${next.stage}` : `${m.recordName} ${label} updated`,
-            level: next.stage === "Delivered" && stageChanged ? "success" : "info",
-          });
+          event({ moduleId: m.id, recordId, title: `${m.recordName} ${label} updated`, level: "info" });
           audit("Updated record", `${m.name}: ${label}`);
           if (m.kind === "native" && Number(next.on_hand) <= Number(next.reorder_level) && Number(rec.data.on_hand) > Number(rec.data.reorder_level)) {
             event({ moduleId: m.id, recordId, title: `${label} is below reorder level`, detail: `${next.on_hand} on hand, reorder at ${next.reorder_level}`, level: "warning", actor: "System" });
@@ -195,9 +261,43 @@ export const useApp = create<AppState>()(
 
         setArchived: (recordId, archived) => {
           const rec = get().records.find((r) => r.id === recordId)!;
+          const block = denied(rec.moduleId);
+          if (block) return block;
           const m = mod(rec.moduleId);
           patchRecord(recordId, { archived, updatedAt: now(), updatedBy: actorName() });
           audit(archived ? "Archived record" : "Restored record", `${m.name}: ${recordLabel(m, rec.data)}`);
+          return { ok: true };
+        },
+
+        advanceOrder: (recordId, actionId, docs) => {
+          const u = me();
+          const rec = get().records.find((r) => r.id === recordId);
+          const action = ORDER_ACTIONS.find((a) => a.id === actionId);
+          if (!u || !rec?.order || !action) return { ok: false, errors: ["This order or step no longer exists."] };
+          if (!actionsFor(rec).includes(action)) return { ok: false, errors: [`"${action.label}" isn't available at the ${rec.data.stage} step.`] };
+          const owner = actionOwner(rec, action);
+          if (!canActAs(u, owner)) return { ok: false, errors: [`Only ${owner ? POSITION_LABEL[owner] : "the assigned role"} can do this.`] };
+          const missing = (action.docs ?? []).filter((d) => !String(docs[d.key] ?? "").trim());
+          if (missing.length) return { ok: false, errors: missing.map((d) => `${d.label} is required`) };
+          const clean = Object.fromEntries(Object.entries(docs).map(([k, v]) => [k, String(v).trim().toUpperCase()]));
+          const m = mod(rec.moduleId);
+          const paid = action.markPaid ? "Paid" : rec.data.payment;
+          const stage = action.next ? action.next({ ...rec, data: { ...rec.data, payment: paid } }) : rec.data.stage;
+          const data = { ...rec.data, stage, payment: paid };
+          const errors = validateRow(m, get().rules, data, get().records, recordId);
+          if (errors.length) return { ok: false, errors };
+          const description = action.describe(clean);
+          const updated: RecordItem = {
+            ...rec, data, updatedAt: now(), updatedBy: u.name,
+            order: { docs: { ...rec.order.docs, ...clean }, log: [...rec.order.log, logEntry(String(rec.data.stage), description, u)] },
+          };
+          patchRecord(recordId, updated);
+          const no = recordLabel(m, data);
+          const arrival = stage !== rec.data.stage ? ARRIVAL[stage as OrderStage] : undefined;
+          if (arrival) notify(arrival.to, arrival.title(no), `${description} (${u.name})`, recordId);
+          audit("Updated order", `${m.name} · ${no}: ${action.label.toLowerCase()}`);
+          queueOutbound(updated);
+          return { ok: true };
         },
 
         runPipeline: (moduleId, source, rows) => {
@@ -214,7 +314,7 @@ export const useApp = create<AppState>()(
               });
             } else accepted.push(row);
           });
-          const loaded = accepted.map((row) => load(moduleId, row));
+          const loaded = accepted.map((row) => load(moduleId, row, source));
           if (m.kind === "external") loaded.forEach((r) => queueOutbound(r));
           const runs = get().pipelineRuns;
           const run: PipelineRun = {
@@ -241,7 +341,7 @@ export const useApp = create<AppState>()(
             set((s) => ({ rejected: s.rejected.map((r) => (r.id === rowId ? { ...r, errors } : r)) }));
             return { ok: false, errors };
           }
-          const rec = load(row.moduleId, data);
+          const rec = load(row.moduleId, data, "the rejected-records ledger");
           if (m.kind === "external") queueOutbound(rec);
           set((s) => ({ rejected: s.rejected.map((r) => (r.id === rowId ? { ...r, status: "reloaded", raw: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) } : r)) }));
           audit("Fixed and reloaded rejected row", `${m.name}: ${recordLabel(m, rec.data)}`);
@@ -325,6 +425,62 @@ export const useApp = create<AppState>()(
           queueOutbound(rec);
         },
 
+        batchProcess: (items, conflictPolicy) => {
+          const u = me();
+          if (!can(u, "sync.manage")) return null;
+          const outcomes: BatchOutcome[] = [];
+          for (const item of items) {
+            if (item.kind === "rejected") {
+              const row = get().rejected.find((r) => r.id === item.id && r.status === "open");
+              if (!row) continue;
+              const m = mod(row.moduleId);
+              const label = recordLabel(m, row.raw) || `Row ${row.rowIndex}`;
+              if (moduleAccess(u, m.id) !== "edit") {
+                outcomes.push({ label, type: m.recordName, result: "failed", message: `No permission to load ${m.name} records` });
+                continue;
+              }
+              const errors = validateRow(m, get().rules, row.raw, get().records);
+              if (errors.length) {
+                set((s) => ({ rejected: s.rejected.map((r) => (r.id === row.id ? { ...r, errors } : r)) }));
+                outcomes.push({ label, type: m.recordName, result: "failed", message: errors.join("; ") });
+                continue;
+              }
+              const rec = load(m.id, row.raw, "batch processing");
+              if (m.kind === "external") queueOutbound(rec);
+              set((s) => ({ rejected: s.rejected.map((r) => (r.id === row.id ? { ...r, status: "reloaded" } : r)) }));
+              outcomes.push({ label, type: m.recordName, result: "success", message: "Passed validation and loaded" });
+              continue;
+            }
+            const op = get().syncOps.find((o) => o.id === item.id);
+            const rec = op && get().records.find((r) => r.id === op.recordId);
+            if (!op || !rec) continue;
+            const type = mod(op.moduleId).recordName;
+            if (item.kind === "conflict") {
+              if (op.status !== "conflict") continue;
+              if (conflictPolicy === "skip") {
+                outcomes.push({ label: op.recordLabel, type, result: "action", message: "Needs a decision: choose which version to keep" });
+              } else {
+                get().resolveConflict(op.id, conflictPolicy);
+                outcomes.push({ label: op.recordLabel, type, result: "success", message: conflictPolicy === "zentra" ? "Kept the Zentra version and pushed it" : "Kept the Bitrix24 version" });
+              }
+              continue;
+            }
+            if (op.status !== "failed") continue;
+            if (get().outage) {
+              outcomes.push({ label: op.recordLabel, type, result: "failed", message: "Bitrix24 is unreachable; try again later" });
+              continue;
+            }
+            patchOp(op.id, { status: "success", resolution: "Retried in a batch", resolvedAt: now(), resolvedBy: actorName() });
+            queueOutbound(rec);
+            outcomes.push({ label: op.recordLabel, type, result: "success", message: "Sent to Bitrix24 again" });
+          }
+          const run: BatchRun = { id: uid("batch-"), at: now(), by: actorName(), outcomes };
+          set((s) => ({ batches: [run, ...s.batches].slice(0, 20) }));
+          const count = (r: BatchOutcome["result"]) => outcomes.filter((o) => o.result === r).length;
+          audit("Ran batch processing", `${outcomes.length} records: ${count("success")} succeeded, ${count("failed")} failed, ${count("action")} need action`);
+          return run;
+        },
+
         setOutage: (on) => {
           set({ outage: on });
           event({ moduleId: "operations", title: on ? "Bitrix24 is unreachable" : "Bitrix24 connection restored", level: on ? "error" : "success", actor: "System" });
@@ -373,6 +529,35 @@ export const useApp = create<AppState>()(
           set((s) => ({ users: s.users.map((u) => (u.id === userId ? { ...u, role } : u)) }));
           audit("Changed role", `${get().users.find((u) => u.id === userId)!.name}: ${role}`);
         },
+        setUserPosition: (userId, position) => {
+          const u = me();
+          const target = get().users.find((x) => x.id === userId);
+          if (!can(u, "access.manage") || !target || target.role !== "employee" || target.department !== u?.department) {
+            return { ok: false, errors: ["You can only assign roles to employees in your department."] };
+          }
+          set((s) => ({ users: s.users.map((x) => (x.id === userId ? { ...x, position } : x)) }));
+          audit("Assigned Operations role", `${target.name}: ${POSITION_LABEL[position]}`);
+          return { ok: true };
+        },
+        setFinancialAccess: (userId, on) => {
+          const target = get().users.find((x) => x.id === userId);
+          if (!can(me(), "users.manage") || !target) return { ok: false, errors: ["Only the Super Admin can grant financial access."] };
+          set((s) => ({ users: s.users.map((x) => (x.id === userId ? { ...x, financialAccess: on } : x)) }));
+          audit(on ? "Granted financial data access" : "Revoked financial data access", target.name);
+          return { ok: true };
+        },
+
+        markNotificationRead: (id) => {
+          const u = me();
+          if (!u) return;
+          set((s) => ({ notifications: s.notifications.map((n) => (n.id === id && !n.readBy.includes(u.id) ? { ...n, readBy: [...n.readBy, u.id] } : n)) }));
+        },
+        markAllNotificationsRead: () => {
+          const u = me();
+          if (!u) return;
+          set((s) => ({ notifications: s.notifications.map((n) => (isFor(n, u) && !n.readBy.includes(u.id) ? { ...n, readBy: [...n.readBy, u.id] } : n)) }));
+        },
+
         setModuleAccess: (userId, moduleId, access) => {
           set((s) => ({ users: s.users.map((u) => (u.id === userId ? { ...u, moduleAccess: { ...u.moduleAccess, [moduleId]: access } } : u)) }));
           audit("Changed module access", `${get().users.find((u) => u.id === userId)!.name}: ${mod(moduleId).name} ${access}`);
@@ -394,7 +579,8 @@ export const useApp = create<AppState>()(
       };
     },
     {
-      name: "zentra-demo-v1",
+      // v2: Operations positions, order flow, notifications. Older saved demos start fresh.
+      name: "zentra-demo-v2",
       storage: createJSONStorage(() => {
         try {
           localStorage.setItem("__t", "1");
@@ -416,4 +602,9 @@ export const useApp = create<AppState>()(
 );
 
 export const useMe = () => useApp((s) => s.users.find((u) => u.id === s.sessionUserId) ?? null);
+
+/** Whether a notification is addressed to this user's position or role. */
+export function isFor(n: AppNotification, u: User) {
+  return (!!n.to.position && n.to.position === u.position) || (!!n.to.role && n.to.role === u.role);
+}
 export type { EventLevel };
