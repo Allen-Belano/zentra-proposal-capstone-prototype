@@ -26,6 +26,11 @@ export default {
         sidebar: { DEFAULT: "hsl(var(--sidebar))", border: "hsl(var(--sidebar-border))" },
       },
       borderRadius: { lg: "var(--radius)", md: "calc(var(--radius) - 2px)", sm: "calc(var(--radius) - 4px)" },
+      boxShadow: {
+        soft: "0 1px 2px rgb(16 24 40 / 0.04), 0 1px 3px rgb(16 24 40 / 0.03)",
+        float: "0 12px 32px -8px rgb(16 24 40 / 0.14), 0 4px 8px -4px rgb(16 24 40 / 0.06)",
+      },
+      transitionTimingFunction: { fluid: "cubic-bezier(0.16, 1, 0.3, 1)" },
     },
   },
   plugins: [animate],
