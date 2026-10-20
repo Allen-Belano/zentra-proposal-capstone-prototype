@@ -82,7 +82,7 @@ function RunDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenChange
               />
               <button
                 type="button" onClick={() => inputRef.current?.click()}
-                className="flex flex-col items-center gap-1 rounded-lg border border-dashed px-4 py-6 text-center text-sm transition-colors hover:bg-accent"
+                className="flex flex-col items-center gap-1 rounded-2xl border-2 border-dashed px-4 py-6 text-center text-sm transition-colors duration-200 hover:border-primary/40 hover:bg-muted"
               >
                 <FileUp className="h-5 w-5 text-muted-foreground" />
                 {file ? <span className="font-medium">{file.name}</span> : <span>Choose a CSV file</span>}
@@ -106,7 +106,7 @@ function RunDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenChange
                 const done = stage > i;
                 const active = stage === i;
                 return (
-                  <li key={s.key} className={cn("flex items-center gap-3 rounded-md px-3 py-2.5", active && "bg-accent")}>
+                  <li key={s.key} className={cn("flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors duration-300", active && "bg-muted")}>
                     <span className={cn(
                       "flex h-6 w-6 items-center justify-center rounded-full border text-xs",
                       done && "border-primary bg-primary text-primary-foreground", active && "border-primary text-primary",
@@ -123,7 +123,7 @@ function RunDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenChange
               })}
             </ol>
             {result && (
-              <div className="grid grid-cols-3 gap-3 rounded-lg border p-4 text-center">
+              <div className="grid grid-cols-3 gap-3 rounded-2xl bg-muted p-4 text-center">
                 <div><div className="text-2xl font-semibold tabular">{result.total}</div><div className="text-xs text-muted-foreground">Rows read</div></div>
                 <div><div className="text-2xl font-semibold tabular text-success">{result.loaded}</div><div className="text-xs text-muted-foreground">Loaded</div></div>
                 <div><div className={cn("text-2xl font-semibold tabular", result.rejected && "text-warning")}>{result.rejected}</div><div className="text-xs text-muted-foreground">Rejected</div></div>
@@ -259,7 +259,7 @@ function RulesTab() {
         </Select>
       </CardHeader>
       <CardContent className="grid gap-4">
-        <div className="divide-y rounded-lg border">
+        <div className="divide-y divide-border/70 rounded-2xl bg-muted">
           {list.length === 0 && <EmptyState title="No rules yet" description="Add a rule below. Without rules, every row is accepted." />}
           {list.map((r) => (
             <div key={r.id} className="flex items-center gap-3 px-4 py-3">
@@ -274,7 +274,7 @@ function RulesTab() {
             </div>
           ))}
         </div>
-        <div className="grid gap-3 rounded-lg border bg-muted/40 p-4 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
+        <div className="grid gap-3 rounded-2xl border border-dashed p-4 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
           <div className="grid gap-2">
             <Label>Field</Label>
             <Select value={field} onValueChange={setField}>
