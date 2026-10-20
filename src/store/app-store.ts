@@ -131,24 +131,25 @@ export const useApp = create<AppState>()(
           const op = s.syncOps.find((o) => o.id === opId);
           if (!rec || !op) return;
           const label = recordLabel(mod(rec.moduleId), rec.data);
+          const source = mod(rec.moduleId).source ?? "The source system";
           if (s.outage) {
             if (attempt < 3) {
               patchOp(opId, { attempts: attempt });
               pushOutbound(recordId, opId, attempt + 1);
               return;
             }
-            patchOp(opId, { status: "failed", attempts: 3, error: "Bitrix24 didn't respond after 3 attempts (timeout)." });
+            patchOp(opId, { status: "failed", attempts: 3, error: `${source} didn't respond after 3 attempts (timeout).` });
             patchRecord(recordId, { syncState: "failed" });
-            event({ moduleId: rec.moduleId, recordId, title: `Write-back failed for ${label}`, detail: "Bitrix24 didn't respond after 3 attempts.", level: "error", actor: "System" });
-            notify({ role: "dept_head" }, `Write-back failed for ${label}`, "Bitrix24 didn't respond after 3 attempts", recordId);
+            event({ moduleId: rec.moduleId, recordId, title: `Write-back failed for ${label}`, detail: `${source} didn't respond after 3 attempts.`, level: "error", actor: "System" });
+            notify({ role: "dept_head" }, `Write-back failed for ${label}`, `${source} didn't respond after 3 attempts`, recordId);
             return;
           }
           const remote = s.remote[recordId];
           if (remote && rec.syncedVersion !== undefined && remote.version !== rec.syncedVersion) {
-            patchOp(opId, { status: "conflict", attempts: attempt, error: "The order changed in Bitrix24 after Zentra's last sync.", local: { ...rec.data }, remote: { ...remote.data } });
+            patchOp(opId, { status: "conflict", attempts: attempt, error: `The record changed in ${source} after Zentra's last sync.`, local: { ...rec.data }, remote: { ...remote.data } });
             patchRecord(recordId, { syncState: "conflict" });
-            event({ moduleId: rec.moduleId, recordId, title: `Sync conflict on ${label}`, detail: "Changed in both Zentra and Bitrix24. Waiting for review.", level: "warning", actor: "System" });
-            notify({ role: "dept_head" }, `Sync conflict on ${label}`, "Changed in both Zentra and Bitrix24", recordId);
+            event({ moduleId: rec.moduleId, recordId, title: `Sync conflict on ${label}`, detail: `Changed in both Zentra and ${source}. Waiting for review.`, level: "warning", actor: "System" });
+            notify({ role: "dept_head" }, `Sync conflict on ${label}`, `Changed in both Zentra and ${source}`, recordId);
             return;
           }
           const version = (remote?.version ?? 0) + 1;
@@ -373,8 +374,8 @@ export const useApp = create<AppState>()(
             return { ...r, data: { ...remote.data }, syncedVersion: remote.version, updatedAt: now(), updatedBy: `${m.source} sync` };
           });
           set({ records, syncOps: [...inboundOps, ...s.syncOps] });
-          // 2) New deals won in Bitrix24 enter through the ETL pipeline.
-          const inbox = get().remoteInbox;
+          // 2) New deals won in Bitrix24 enter through the ETL pipeline. The mock inbox only holds Bitrix24 deals.
+          const inbox = moduleId === "operations" ? get().remoteInbox : [];
           let pulled = 0;
           let rejectedCount = 0;
           if (inbox.length) {
