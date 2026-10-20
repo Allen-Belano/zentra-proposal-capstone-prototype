@@ -1,9 +1,13 @@
 import type { ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, CircleDashed, CloudOff, HardDrive, Loader2 } from "lucide-react";
+import { AlertTriangle, CheckCircle2, CircleDashed, CloudOff, HardDrive, Loader2, Lock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { stageVariant, STAGE_INFO, type OrderStage } from "@/lib/orders";
+import { canViewFinancials, POSITION_LABEL } from "@/lib/rbac";
 import type { EventLevel, SyncState } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, formatPeso } from "@/lib/utils";
+import { useMe } from "@/store/app-store";
 
 export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
   return (
@@ -68,4 +72,36 @@ export function EmptyState({ title, description, action }: { title: string; desc
       {action && <div className="mt-2">{action}</div>}
     </div>
   );
+}
+
+export const useCanSeeMoney = () => canViewFinancials(useMe());
+
+/** A peso amount, masked for users without financial access. */
+export function Money({ value, className }: { value: number | string | undefined; className?: string }) {
+  const allowed = useCanSeeMoney();
+  if (allowed) return <span className={cn("tabular", className)}>{formatPeso(Number(value ?? 0))}</span>;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span tabIndex={0} className={cn("inline-flex items-center gap-1 text-muted-foreground", className)} aria-label="Restricted amount">
+          <Lock className="h-3 w-3" />₱ ••••
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>Only authorized roles can see amounts</TooltipContent>
+    </Tooltip>
+  );
+}
+
+export function StageBadge({ stage }: { stage: string }) {
+  return <Badge variant={stageVariant(stage)}>{stage}</Badge>;
+}
+
+export function PaymentBadge({ status }: { status: string }) {
+  return <Badge variant={status === "Paid" ? "success" : "warning"}>{status || "Unpaid"}</Badge>;
+}
+
+/** The position responsible for an order's current step. */
+export function ownerOf(stage: string) {
+  const owner = STAGE_INFO[stage as OrderStage]?.owner;
+  return owner ? POSITION_LABEL[owner] : null;
 }
