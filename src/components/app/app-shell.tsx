@@ -1,8 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
-  Activity, ChevronDown, DatabaseBackup, GitMerge, LayoutDashboard, LogOut, Menu, Monitor, Moon, PanelLeft, Puzzle,
-  RefreshCw, RotateCcw, ScrollText, ShieldCheck, Sun, Users, Workflow,
+  Activity, Bell, ChevronRight, DatabaseBackup, GitMerge, LayoutDashboard, LogOut, Menu, Monitor, Moon, PanelLeft,
+  Puzzle, RefreshCw, RotateCcw, ScrollText, ShieldCheck, Sun, Users, Workflow,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -14,10 +14,10 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ModuleIcon } from "@/components/app/module-icon";
 import { ZentraLogo, ZentraMark } from "@/components/app/zentra-logo";
-import { can, moduleAccess, ROLE_LABEL, type Permission } from "@/lib/rbac";
+import { can, moduleAccess, titleOf, type Permission } from "@/lib/rbac";
 import { useTheme } from "@/lib/theme";
-import { cn } from "@/lib/utils";
-import { useApp, useMe } from "@/store/app-store";
+import { cn, timeAgo } from "@/lib/utils";
+import { isFor, useApp, useMe } from "@/store/app-store";
 
 interface NavItem { to: string; label: string; icon: ReactNode; count?: number }
 
@@ -126,29 +126,49 @@ function NavList({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate?: 
   );
 }
 
+const THEMES = [
+  { value: "light", label: "Light", icon: <Sun /> },
+  { value: "dark", label: "Dark", icon: <Moon /> },
+  { value: "system", label: "System", icon: <Monitor /> },
+] as const;
+
 function UserMenu() {
   const me = useMe()!;
   const logout = useApp((s) => s.logout);
   const resetDemo = useApp((s) => s.resetDemo);
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme();
   const initials = me.name.split(" ").map((n) => n[0]).join("").slice(0, 2);
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="group flex items-center gap-2.5 rounded-full border border-border/60 bg-card p-1 text-left shadow-soft transition-[background-color,box-shadow] duration-200 hover:shadow-float sm:pr-3 dark:border-border">
+        <button aria-label="Account menu" className="rounded-full p-0.5 transition-shadow duration-200 hover:ring-4 hover:ring-primary/10 data-[state=open]:ring-4 data-[state=open]:ring-primary/15">
           <Avatar className="h-9 w-9"><AvatarFallback>{initials}</AvatarFallback></Avatar>
-          <span className="hidden flex-col leading-tight sm:flex">
-            <span className="text-sm font-medium">{me.name}</span>
-            <span className="text-xs text-muted-foreground">{me.email}</span>
-          </span>
-          <ChevronDown className="hidden h-4 w-4 text-muted-foreground transition-transform duration-200 ease-fluid group-data-[state=open]:rotate-180 sm:block" />
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-60">
+      <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel>
           <div className="font-medium">{me.name}</div>
-          <div className="text-xs font-normal text-muted-foreground">{ROLE_LABEL[me.role]} · {me.department}</div>
+          <div className="text-xs font-normal text-muted-foreground">{titleOf(me)} · {me.department}</div>
+          <div className="truncate text-xs font-normal text-muted-foreground">{me.email}</div>
         </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <div className="px-3 pb-1 pt-1.5 text-xs text-muted-foreground">Theme</div>
+        <div className="mx-1.5 mb-1 grid grid-cols-3 gap-1 rounded-xl bg-muted p-1">
+          {THEMES.map((t) => (
+            <button
+              key={t.value}
+              onClick={() => setTheme(t.value)}
+              aria-pressed={theme === t.value}
+              className={cn(
+                "flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs transition-colors duration-200 [&_svg]:size-3.5",
+                theme === t.value ? "bg-card font-medium text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {t.icon}{t.label}
+            </button>
+          ))}
+        </div>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => { resetDemo(); toast.success("Demo data reset"); }}>
           <RotateCcw /> Reset demo data
@@ -161,39 +181,88 @@ function UserMenu() {
   );
 }
 
-function ThemeMenu() {
-  const { theme, setTheme } = useTheme();
+function NotificationBell() {
+  const me = useMe()!;
+  const all = useApp((s) => s.notifications);
+  const markRead = useApp((s) => s.markNotificationRead);
+  const markAll = useApp((s) => s.markAllNotificationsRead);
+  const navigate = useNavigate();
+  const mine = all.filter((n) => isFor(n, me)).slice(0, 12);
+  const unread = mine.filter((n) => !n.readBy.includes(me.id)).length;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="icon" aria-label="Change theme">
-          {theme === "light" ? <Sun /> : theme === "dark" ? <Moon /> : <Monitor />}
+        <Button variant="ghost" size="icon" className="relative" aria-label={unread ? `Notifications, ${unread} unread` : "Notifications"}>
+          <Bell />
+          {unread > 0 && (
+            <span className="absolute right-1 top-1 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[10px] font-semibold tabular text-primary-foreground duration-300 animate-in zoom-in-50">
+              {unread}
+            </span>
+          )}
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onSelect={() => setTheme("light")}><Sun /> Light</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => setTheme("dark")}><Moon /> Dark</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => setTheme("system")}><Monitor /> System</DropdownMenuItem>
+      <DropdownMenuContent align="end" className="w-[min(22rem,calc(100vw-2rem))] p-0">
+        <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
+          <span className="text-sm font-medium">Notifications</span>
+          {unread > 0 && <button onClick={markAll} className="text-xs text-primary hover:underline">Mark all as read</button>}
+        </div>
+        {mine.length === 0 ? (
+          <p className="px-4 py-8 text-center text-sm text-muted-foreground">You're all caught up</p>
+        ) : (
+          <div className="max-h-96 overflow-y-auto p-1.5">
+            {mine.map((n) => {
+              const isNew = !n.readBy.includes(me.id);
+              return (
+                <DropdownMenuItem
+                  key={n.id}
+                  className="items-start gap-3 py-2.5"
+                  onSelect={() => { markRead(n.id); if (n.orderId) navigate({ to: "/orders/$orderId", params: { orderId: n.orderId } }); }}
+                >
+                  <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", isNew ? "bg-primary" : "bg-transparent")} />
+                  <span className="min-w-0 flex-1">
+                    <span className={cn("block text-sm", isNew && "font-medium")}>{n.title}</span>
+                    {n.detail && <span className="block truncate text-xs text-muted-foreground">{n.detail}</span>}
+                    <span className="block text-xs text-muted-foreground">{timeAgo(n.at)}</span>
+                  </span>
+                </DropdownMenuItem>
+              );
+            })}
+          </div>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
 
-function ConnectionPill() {
-  const me = useMe();
-  const outage = useApp((s) => s.outage);
-  if (!can(me, "sync.manage")) return null;
+/** Section and page name for the title bar, e.g. "Monitoring › Order tracking". */
+function useTitle() {
+  const sections = useNav();
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const records = useApp((s) => s.records);
+  if (path.startsWith("/orders/")) {
+    const rec = records.find((r) => r.id === path.split("/")[2]);
+    return { section: "Order tracking", page: String(rec?.data.order_no ?? "Order"), back: "/activity" };
+  }
+  for (const sec of sections) {
+    const item = sec.items.find((i) => (i.to === "/" ? path === "/" : path.startsWith(i.to)));
+    if (item) return { section: sec.title, page: item.label };
+  }
+  return { section: undefined, page: "Zentra" };
+}
+
+function TitleBar() {
+  const { section, page, back } = useTitle();
   return (
-    <Link to="/sync" className={cn(
-      "hidden h-9 items-center gap-2 rounded-full border border-border/60 bg-card px-3.5 text-xs shadow-soft transition-colors duration-200 md:flex dark:border-border",
-      outage ? "border-destructive/40 text-destructive" : "text-muted-foreground hover:text-foreground",
-    )}>
-      <span className="relative flex h-2 w-2">
-        <span className={cn("absolute inset-0 animate-ping rounded-full opacity-60 motion-reduce:hidden", outage ? "bg-destructive" : "bg-success")} />
-        <span className={cn("relative h-2 w-2 rounded-full", outage ? "bg-destructive" : "bg-success")} />
-      </span>
-      {outage ? "Bitrix24 unreachable" : "Bitrix24 connected"}
-    </Link>
+    <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-sm">
+      {section && (
+        <>
+          {back ? <Link to={back} className="hidden truncate text-muted-foreground transition-colors hover:text-foreground sm:inline">{section}</Link>
+            : <span className="hidden truncate text-muted-foreground sm:inline">{section}</span>}
+          <ChevronRight className="hidden h-3.5 w-3.5 shrink-0 text-muted-foreground/60 sm:block" />
+        </>
+      )}
+      <span className="truncate font-medium">{page}</span>
+    </nav>
   );
 }
 
@@ -227,11 +296,24 @@ export function AppShell() {
         <div className="flex-1 overflow-y-auto py-3">
           <NavList collapsed={collapsed} />
         </div>
+        <div className={cn("px-3", collapsed && "flex justify-center")}>
+          <button
+            onClick={toggle}
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className={cn(
+              "flex h-9 items-center gap-3 rounded-xl px-3 text-sm text-muted-foreground transition-colors duration-200 hover:bg-muted/50 hover:text-foreground [&_svg]:size-[18px]",
+              collapsed && "w-10 justify-center px-0",
+            )}
+          >
+            <PanelLeft className={cn("transition-transform duration-300 ease-fluid", collapsed && "rotate-180")} />
+            {!collapsed && "Collapse"}
+          </button>
+        </div>
         <div className={cn("m-3 flex items-center gap-2.5 rounded-2xl bg-muted px-3 py-2.5 text-xs text-muted-foreground", collapsed && "justify-center px-0")}>
           <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-card text-primary shadow-soft"><ShieldCheck className="h-3.5 w-3.5" /></span>
           {!collapsed && (
             <span className="min-w-0 leading-tight">
-              <span className="block truncate font-medium text-foreground">{ROLE_LABEL[me.role]}</span>
+              <span className="block truncate font-medium text-foreground">{titleOf(me)}</span>
               <span className="block truncate">{me.department}</span>
             </span>
           )}
@@ -249,17 +331,13 @@ export function AppShell() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="safe-top sticky top-0 z-30 bg-background/80 backdrop-blur-md">
-          <div className="flex h-16 items-center gap-2 px-4 sm:px-6 lg:mt-3">
-            <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
+          <div className="flex h-14 items-center gap-2 px-4 sm:px-6 lg:mt-3">
+            <Button variant="ghost" size="icon" className="-ml-2 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
               <Menu />
             </Button>
-            <Button variant="ghost" size="icon" className="hidden lg:inline-flex" onClick={toggle} aria-label="Toggle sidebar">
-              <PanelLeft />
-            </Button>
-            <div className="lg:hidden"><ZentraMark className="h-6 w-6" /></div>
-            <div className="ml-auto flex items-center gap-2">
-              <ConnectionPill />
-              <ThemeMenu />
+            <TitleBar />
+            <div className="ml-auto flex shrink-0 items-center gap-1.5">
+              <NotificationBell />
               <UserMenu />
             </div>
           </div>
