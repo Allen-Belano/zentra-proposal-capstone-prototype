@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Activity, ChevronDown, DatabaseBackup, GitMerge, LayoutDashboard, LogOut, Menu, Monitor, Moon, PanelLeft, Puzzle,
@@ -203,6 +203,9 @@ export function AppShell() {
     try { return localStorage.getItem("zentra-sidebar") === "collapsed"; } catch { return false; }
   });
   const [mobileOpen, setMobileOpen] = useState(false);
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  // Each page starts at the top, so its entrance animation is visible.
+  useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [path]);
   const toggle = () => {
     setCollapsed((c) => {
       try { localStorage.setItem("zentra-sidebar", c ? "open" : "collapsed"); } catch { /* ignore */ }
@@ -260,8 +263,10 @@ export function AppShell() {
             </div>
           </div>
         </header>
-        <main className="safe-bottom mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 lg:py-8">
-          <Outlet />
+        <main className="safe-bottom mx-auto w-full max-w-7xl flex-1 px-4 pb-8 pt-4 sm:px-6 lg:pt-6">
+          <div key={path} className="duration-500 ease-fluid animate-in fade-in-0 slide-in-from-bottom-2">
+            <Outlet />
+          </div>
         </main>
       </div>
     </div>
