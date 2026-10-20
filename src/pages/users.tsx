@@ -139,44 +139,63 @@ function TeamAccess() {
   const modules = useApp((s) => s.modules.filter((m) => m.active));
   const setModuleAccess = useApp((s) => s.setModuleAccess);
   const team = users.filter((u) => u.role === "employee" && u.department === me.department);
+  const accessSelect = (u: User, m: { id: string; name: string }) => (
+    <Select
+      value={u.moduleAccess[m.id] ?? "none"}
+      onValueChange={(v) => { setModuleAccess(u.id, m.id, v as ModuleAccess); toast.success(`${u.name}: ${m.name} access updated`); }}
+    >
+      <SelectTrigger className="h-8 w-32" aria-label={`${u.name} access to ${m.name}`}><SelectValue /></SelectTrigger>
+      <SelectContent>
+        <SelectItem value="none">No access</SelectItem>
+        <SelectItem value="view">View</SelectItem>
+        <SelectItem value="edit">Edit</SelectItem>
+      </SelectContent>
+    </Select>
+  );
   return (
     <>
       <PageHeader title="Team access" description={`Choose which modules each ${me.department} employee can view or edit. Changes apply right away.`} />
       <Card>
         {team.length === 0 ? <EmptyState title="No employees in your department" /> : (
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>Employee</TableHead>
-                {modules.map((m) => <TableHead key={m.id}>{m.name}</TableHead>)}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {team.map((u) => (
-                <TableRow key={u.id} className={cn(u.status === "disabled" && "opacity-60")}>
-                  <TableCell>
-                    <Person u={u} />
-                    {u.status === "disabled" && <Badge variant="secondary" className="mt-1">Disabled</Badge>}
-                  </TableCell>
-                  {modules.map((m) => (
-                    <TableCell key={m.id}>
-                      <Select
-                        value={u.moduleAccess[m.id] ?? "none"}
-                        onValueChange={(v) => { setModuleAccess(u.id, m.id, v as ModuleAccess); toast.success(`${u.name}: ${m.name} access updated`); }}
-                      >
-                        <SelectTrigger className="h-8 w-28" aria-label={`${u.name} access to ${m.name}`}><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">No access</SelectItem>
-                          <SelectItem value="view">View</SelectItem>
-                          <SelectItem value="edit">Edit</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
+          <>
+            <div className="hidden sm:block">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead>Employee</TableHead>
+                    {modules.map((m) => <TableHead key={m.id}>{m.name}</TableHead>)}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {team.map((u) => (
+                    <TableRow key={u.id} className={cn(u.status === "disabled" && "opacity-60")}>
+                      <TableCell>
+                        <Person u={u} />
+                        {u.status === "disabled" && <Badge variant="secondary" className="mt-1">Disabled</Badge>}
+                      </TableCell>
+                      {modules.map((m) => <TableCell key={m.id}>{accessSelect(u, m)}</TableCell>)}
+                    </TableRow>
                   ))}
-                </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+            <ul className="divide-y sm:hidden">
+              {team.map((u) => (
+                <li key={u.id} className={cn("p-4", u.status === "disabled" && "opacity-60")}>
+                  <Person u={u} />
+                  {u.status === "disabled" && <Badge variant="secondary" className="mt-2">Disabled</Badge>}
+                  <div className="mt-3 grid gap-2">
+                    {modules.map((m) => (
+                      <div key={m.id} className="flex items-center justify-between gap-3">
+                        <span className="text-sm text-muted-foreground">{m.name}</span>
+                        {accessSelect(u, m)}
+                      </div>
+                    ))}
+                  </div>
+                </li>
               ))}
-            </TableBody>
-          </Table>
+            </ul>
+          </>
         )}
       </Card>
       <PermissionMatrix />
