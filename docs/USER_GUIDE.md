@@ -2,7 +2,7 @@
 
 Zentra is the centralized digital workspace for iFixz Enterprise Co. It brings orders from Bitrix24, inventory, and imported files into one place, and moves every order through the Operations team step by step until it is delivered and paid.
 
-This guide covers how to sign in, how an order moves, what each role does, and a demo script for presenting the prototype.
+This guide covers how to sign in, how an order moves, what each role does, and a demo script for presenting the prototype. For a one-page version, see the [quick start](QUICK_START.md).
 
 > **Prototype note:** everything runs in your browser with sample data. Nothing is sent to a real Bitrix24 or database. Changes are saved in this browser only, and **Reset demo data** puts everything back.
 
