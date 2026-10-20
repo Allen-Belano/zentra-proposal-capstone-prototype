@@ -335,7 +335,7 @@ export function PipelinePage() {
                   <TableHead>Run</TableHead>
                   <TableHead>Source</TableHead>
                   <TableHead className="text-right">Loaded</TableHead>
-                  <TableHead className="text-right">Rejected</TableHead>
+                  <TableHead className="hidden text-right sm:table-cell">Rejected</TableHead>
                   <TableHead className="hidden sm:table-cell">Status</TableHead>
                   <TableHead className="hidden md:table-cell">Started</TableHead>
                 </TableRow>
@@ -348,11 +348,14 @@ export function PipelinePage() {
                       <div className="text-xs text-muted-foreground">{modules.find((m) => m.id === r.moduleId)?.name}</div>
                     </TableCell>
                     <TableCell>
-                      <div className="max-w-[12rem] truncate">{r.source}</div>
+                      <div className="max-w-[7rem] truncate min-[360px]:max-w-[9rem] sm:max-w-[12rem]">{r.source}</div>
                       <div className="text-xs text-muted-foreground">{r.runBy}</div>
                     </TableCell>
-                    <TableCell className="text-right tabular">{r.loaded}</TableCell>
-                    <TableCell className={cn("text-right tabular", r.rejected > 0 && "text-warning")}>{r.rejected}</TableCell>
+                    <TableCell className="text-right tabular">
+                      {r.loaded}
+                      {r.rejected > 0 && <div className="whitespace-nowrap text-xs text-warning sm:hidden">{r.rejected} rejected</div>}
+                    </TableCell>
+                    <TableCell className={cn("hidden text-right tabular sm:table-cell", r.rejected > 0 && "text-warning")}>{r.rejected}</TableCell>
                     <TableCell className="hidden sm:table-cell"><RunStatus run={r} /></TableCell>
                     <TableCell className="hidden whitespace-nowrap text-muted-foreground md:table-cell">{formatDateTime(r.startedAt)}</TableCell>
                   </TableRow>
