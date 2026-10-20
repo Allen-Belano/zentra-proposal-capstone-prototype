@@ -151,7 +151,9 @@ export function SyncPage() {
                     <TableCell className="font-medium">{o.recordLabel}</TableCell>
                     <TableCell>
                       <span className="flex items-center gap-1.5 whitespace-nowrap text-sm text-muted-foreground [&_svg]:size-4">
-                        {o.direction === "outbound" ? <><ArrowUpRight className="text-primary" />To Bitrix24</> : <><ArrowDownLeft className="text-success" />From Bitrix24</>}
+                        {o.direction === "outbound"
+                          ? <><ArrowUpRight className="text-primary" /><span>To<span className="hidden sm:inline"> Bitrix24</span></span></>
+                          : <><ArrowDownLeft className="text-success" /><span>From<span className="hidden sm:inline"> Bitrix24</span></span></>}
                       </span>
                     </TableCell>
                     <TableCell>
