@@ -114,10 +114,10 @@ function AttentionList() {
       </CardHeader>
       <CardContent className="flex flex-col gap-1">
         {items.map((i) => (
-          <Link key={i.text} to={i.to} className="flex items-center gap-3 rounded-md px-2 py-2.5 text-sm transition-colors hover:bg-accent [&_svg]:size-4">
+          <Link key={i.text} to={i.to} className="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors duration-200 hover:bg-muted [&_svg]:size-4">
             <span className={i.tone === "danger" ? "text-destructive" : "text-warning"}>{i.icon}</span>
             <span className="flex-1">{i.text}</span>
-            <ChevronRight className="text-muted-foreground" />
+            <ChevronRight className="text-muted-foreground transition-transform duration-200 ease-fluid group-hover:translate-x-0.5" />
           </Link>
         ))}
       </CardContent>
@@ -170,7 +170,7 @@ function ModuleHealth() {
         {modules.map((m) => {
           const down = m.kind === "external" && outage;
           return (
-            <Link key={m.id} to={`/modules/${m.id}`} className="rounded-lg border p-4 transition-colors hover:bg-accent/60">
+            <Link key={m.id} to={`/modules/${m.id}`} className="rounded-2xl bg-muted p-4 transition-[background-color,transform] duration-200 ease-fluid hover:-translate-y-0.5 hover:bg-accent">
               <div className="flex items-center justify-between">
                 <span className="font-medium">{m.name}</span>
                 {m.kind === "native"
@@ -198,13 +198,13 @@ function AdminOverview() {
   const active = users.filter((u) => u.status === "active");
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard label="Active accounts" value={active.length} icon={<UserCheck />} hint={`${users.length} total`} />
         <StatCard label="Disabled accounts" value={users.length - active.length} icon={<ShieldOff />} hint="Can't sign in" />
         <StatCard label="Sign-ins today" value={signIns} icon={<Clock />} hint="Last 24 hours" />
         <StatCard label="Audit events today" value={events} icon={<Workflow />} hint="Last 24 hours" />
       </div>
-      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+      <div className="stagger mt-4 grid gap-4 lg:grid-cols-3">
         <Card>
           <CardHeader><CardTitle>Accounts by role</CardTitle><CardDescription>Active accounts only</CardDescription></CardHeader>
           <CardContent className="flex flex-col gap-3">
@@ -263,7 +263,7 @@ export function OverviewPage() {
   return (
     <>
       <PageHeader title={`${greeting}, ${first}`} description={isHead ? "Operations at a glance and anything that needs your review." : "Your orders and stock at a glance."} />
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard label="Orders in progress" value={inProgress.length} icon={<Truck />} hint={`${dueSoon.length} due within 2 days`} />
         <StatCard label="Low-stock items" value={lowStock.length} icon={<PackageX />} tone={lowStock.length ? "warning" : "default"} hint="At or below reorder level" />
         {isHead ? (
@@ -278,7 +278,7 @@ export function OverviewPage() {
           </>
         )}
       </div>
-      <div className="mt-4 grid gap-4 lg:grid-cols-3">
+      <div className="stagger mt-4 grid gap-4 lg:grid-cols-3">
         {isHead ? (
           <>
             <PipelineChart />
