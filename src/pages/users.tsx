@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState, PageHeader } from "@/components/app/bits";
 import { Forbidden } from "@/components/app/guard";
-import { can, PERMISSION_MATRIX, ROLE_LABEL } from "@/lib/rbac";
+import { can, PERMISSION_MATRIX, ROLE_LABEL, ROLE_SHORT_LABEL } from "@/lib/rbac";
 import type { ModuleAccess, Role, User } from "@/lib/types";
 import { cn, timeAgo } from "@/lib/utils";
 import { useApp, useMe } from "@/store/app-store";
@@ -42,7 +42,11 @@ function PermissionMatrix() {
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead className="pl-5">Permission</TableHead>
-              {roles.map((r) => <TableHead key={r} className="text-center">{ROLE_LABEL[r]}</TableHead>)}
+              {roles.map((r) => (
+                <TableHead key={r} className="px-1.5 text-center sm:px-3">
+                  <span className="sm:hidden">{ROLE_SHORT_LABEL[r]}</span><span className="hidden sm:inline">{ROLE_LABEL[r]}</span>
+                </TableHead>
+              ))}
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -50,7 +54,7 @@ function PermissionMatrix() {
               <TableRow key={p.label}>
                 <TableCell className="pl-5">{p.label}</TableCell>
                 {roles.map((r) => (
-                  <TableCell key={r} className="text-center">
+                  <TableCell key={r} className="px-1.5 text-center sm:px-3">
                     {p.roles[r] ? <Check className="mx-auto h-4 w-4 text-success" aria-label="Allowed" /> : <Minus className="mx-auto h-4 w-4 text-muted-foreground/50" aria-label="Not allowed" />}
                   </TableCell>
                 ))}

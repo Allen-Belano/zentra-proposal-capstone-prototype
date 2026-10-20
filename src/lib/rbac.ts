@@ -19,6 +19,13 @@ export const ROLE_LABEL: Record<Role, string> = {
   employee: "Department Employee",
 };
 
+/** Compact names for tight spaces such as phone-width tables. */
+export const ROLE_SHORT_LABEL: Record<Role, string> = {
+  super_admin: "Admin",
+  dept_head: "Head",
+  employee: "Employee",
+};
+
 const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   super_admin: ["dashboard.view", "activity.view", "users.manage", "audit.view"],
   dept_head: [
