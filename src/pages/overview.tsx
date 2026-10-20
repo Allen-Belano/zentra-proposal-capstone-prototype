@@ -1,34 +1,394 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { AlertTriangle, ChevronRight, Clock, GitMerge, PackageX, ShieldOff, Truck, UserCheck, Workflow } from "lucide-react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  AlertTriangle, CheckCircle2, Clock, GitMerge, Hourglass, PackageX, ShieldOff, Truck, UserCheck, Wallet, Workflow,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { LevelDot, PageHeader, StatCard } from "@/components/app/bits";
-import { ORDER_STAGES as FLOW } from "@/lib/orders";
-const ORDER_STAGES: string[] = [...FLOW];
-import { ROLE_LABEL, can, moduleAccess } from "@/lib/rbac";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LevelDot, Money, PageHeader, StageBadge, StatCard } from "@/components/app/bits";
+import { delayReason, ORDER_STAGES, STAGE_INFO, type OrderStage } from "@/lib/orders";
+import { ROLE_LABEL, can, moduleAccess, POSITION_LABEL, POSITIONS, titleOf } from "@/lib/rbac";
 import type { RecordItem } from "@/lib/types";
 import { cn, formatDateTime, timeAgo } from "@/lib/utils";
 import { useApp, useMe } from "@/store/app-store";
 
 const PHT_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" });
 const PHT_LABEL = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric" });
+const LONG_DAY = new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", weekday: "long", month: "long", day: "numeric" });
+const MONTH = new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", month: "long", year: "numeric" });
+const SHORT_MONTH = new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", month: "short" });
 
-function useOpsMetrics() {
+/** Calendar day (YYYY-MM-DD) and month (YYYY-MM) in Philippine time. */
+const dayKey = (d: string | Date) => PHT_DAY.format(new Date(d));
+const monthKey = (d: string | Date) => dayKey(d).slice(0, 7);
+const DAY_MS = 86_400_000;
+
+function useOrders() {
   const records = useApp((s) => s.records);
-  return useMemo(() => {
-    const live = (r: RecordItem) => !r.archived;
-    const orders = records.filter((r) => r.moduleId === "operations" && live(r));
-    const items = records.filter((r) => r.moduleId === "ims" && live(r));
-    const inProgress = orders.filter((o) => o.data.stage !== "Delivered");
-    const soon = Date.now() + 2 * 86_400_000;
-    const dueSoon = inProgress.filter((o) => new Date(String(o.data.due_date)).getTime() <= soon);
-    const lowStock = items.filter((i) => Number(i.data.on_hand) <= Number(i.data.reorder_level));
-    const byStage = ORDER_STAGES.map((stage) => ({ stage, count: orders.filter((o) => o.data.stage === stage).length }));
-    return { orders, inProgress, dueSoon, lowStock, byStage };
-  }, [records]);
+  return useMemo(() => records.filter((r) => r.moduleId === "operations" && !r.archived && r.order), [records]);
 }
+
+function useLowStock() {
+  const records = useApp((s) => s.records);
+  return useMemo(() => records.filter((r) => r.moduleId === "ims" && !r.archived && Number(r.data.on_hand) <= Number(r.data.reorder_level)), [records]);
+}
+
+/** When a document was issued, found by its number in the order's history. */
+const docAt = (o: RecordItem, key: "si" | "dr" | "payment") => {
+  const no = o.order?.docs[key];
+  return no ? o.order!.log.find((e) => e.description.includes(no))?.at : undefined;
+};
+
+const open = (o: RecordItem) => o.data.stage !== "Done";
+
+// ---------------------------------------------------------------------------------------
+// Daily process summary
+
+export function DailySummary({ className }: { className?: string }) {
+  const orders = useOrders();
+  const today = dayKey(new Date());
+  const [day, setDay] = useState(today);
+  const { processes, byRole, paid, unpaid } = useMemo(() => {
+    const processes = orders.flatMap((o) => o.order!.log.filter((e) => dayKey(e.at) === day).map((e) => ({ e, o })));
+    const byRole = [
+      ...POSITIONS.map((p) => ({ label: POSITION_LABEL[p], n: processes.filter((x) => x.e.position === p).length })),
+      { label: "New from Bitrix24", n: processes.filter((x) => x.e.by === "Bitrix24").length },
+    ].filter((r) => r.n > 0);
+    const touched = new Map<string, { o: RecordItem; last: string }>();
+    for (const { e, o } of processes) touched.set(o.id, { o, last: e.description });
+    const list = [...touched.values()];
+    return { processes, byRole, paid: list.filter((x) => x.o.data.payment === "Paid"), unpaid: list.filter((x) => x.o.data.payment !== "Paid") };
+  }, [orders, day]);
+  const label = LONG_DAY.format(new Date(`${day}T00:00:00Z`));
+
+  const column = (title: string, tone: "success" | "warning", rows: typeof paid) => (
+    <div className="min-w-0 rounded-2xl bg-muted p-4">
+      <div className="mb-3 flex items-baseline justify-between gap-2">
+        <span className="flex items-center gap-2 text-sm font-medium">
+          <span className={cn("h-2 w-2 rounded-full", tone === "success" ? "bg-success" : "bg-warning")} />{title}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          {rows.length} order{rows.length === 1 ? "" : "s"} · <Money value={rows.reduce((a, x) => a + Number(x.o.data.amount), 0)} />
+        </span>
+      </div>
+      {rows.length === 0 ? <p className="py-2 text-xs text-muted-foreground">None on this day</p> : (
+        <ul className="flex flex-col gap-1">
+          {rows.map(({ o, last }) => (
+            <li key={o.id}>
+              <Link to="/orders/$orderId" params={{ orderId: o.id }} className="flex items-start justify-between gap-3 rounded-xl px-2 py-1.5 text-sm transition-colors hover:bg-card">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate"><span className="font-medium">{o.data.order_no}</span> <span className="text-muted-foreground">{o.data.customer}</span></span>
+                  <span className="block truncate text-xs text-muted-foreground">{last}</span>
+                </span>
+                <Money value={o.data.amount} className="shrink-0 text-xs" />
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+
+  return (
+    <Card className={className}>
+      <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <CardTitle>Daily process summary</CardTitle>
+          <CardDescription>Steps completed and orders handled on {label}</CardDescription>
+        </div>
+        <div className="flex items-center gap-2">
+          {day !== today && <Button variant="ghost" size="sm" onClick={() => setDay(today)}>Today</Button>}
+          <Input type="date" value={day} max={today} onChange={(e) => e.target.value && setDay(e.target.value)} className="h-9 w-40" aria-label="Summary date" />
+        </div>
+      </CardHeader>
+      <CardContent className="grid gap-4">
+        <div className="flex flex-wrap gap-2 text-xs">
+          <span className="rounded-full bg-primary px-3 py-1 font-medium text-primary-foreground">{processes.length} step{processes.length === 1 ? "" : "s"} completed</span>
+          {byRole.map((r) => <span key={r.label} className="rounded-full bg-muted px-3 py-1"><span className="font-medium">{r.n}</span> {r.label}</span>)}
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          {column("Paid", "success", paid)}
+          {column("Unpaid", "warning", unpaid)}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------------------
+// Shared monthly metrics
+
+function monthStats(orders: RecordItem[], m: string) {
+  const delivered = orders.filter((o) => { const at = docAt(o, "dr"); return at && monthKey(at) === m; });
+  const onTime = delivered.filter((o) => dayKey(docAt(o, "dr")!) <= String(o.data.due_date)).length;
+  const completed = orders.filter((o) => o.data.stage === "Done" && monthKey(o.order!.log.at(-1)!.at) === m);
+  const cycle = completed.map((o) => (new Date(o.order!.log.at(-1)!.at).getTime() - new Date(o.order!.log[0].at).getTime()) / DAY_MS);
+  return {
+    received: orders.filter((o) => monthKey(o.order!.log[0].at) === m).length,
+    completed: completed.length,
+    delivered: delivered.length,
+    onTimePct: delivered.length ? Math.round((onTime / delivered.length) * 100) : null,
+    avgDays: cycle.length ? cycle.reduce((a, b) => a + b, 0) / cycle.length : null,
+    invoiced: orders.filter((o) => { const at = docAt(o, "si"); return at && monthKey(at) === m; }).reduce((a, o) => a + Number(o.data.amount), 0),
+    collected: orders.filter((o) => { const at = docAt(o, "payment"); return at && monthKey(at) === m; }).reduce((a, o) => a + Number(o.data.amount), 0),
+  };
+}
+
+export function MonthlyMetrics({ className }: { className?: string }) {
+  const orders = useOrders();
+  const lowStock = useLowStock();
+  const months = useMemo(() => {
+    const d = new Date();
+    return [0, 1, 2].map((back) => {
+      const first = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() - back, 1));
+      return first.toISOString().slice(0, 7);
+    });
+  }, []);
+  const [month, setMonth] = useState(months[0]);
+  const prevKey = useMemo(() => {
+    const [y, mo] = month.split("-").map(Number);
+    return new Date(Date.UTC(y, mo - 2, 1)).toISOString().slice(0, 7);
+  }, [month]);
+  const cur = useMemo(() => monthStats(orders, month), [orders, month]);
+  const prev = useMemo(() => monthStats(orders, prevKey), [orders, prevKey]);
+  const prevName = SHORT_MONTH.format(new Date(`${prevKey}-01T00:00:00Z`));
+  const delta = (a: number, b: number) => {
+    const d = a - b;
+    return d === 0 ? `Same as ${prevName}` : `${d > 0 ? "+" : ""}${d} vs ${prevName}`;
+  };
+
+  const tiles: { label: string; value: React.ReactNode; hint: string }[] = [
+    { label: "Orders received", value: cur.received, hint: delta(cur.received, prev.received) },
+    { label: "Orders completed", value: cur.completed, hint: delta(cur.completed, prev.completed) },
+    { label: "On-time deliveries", value: cur.onTimePct === null ? "—" : `${cur.onTimePct}%`, hint: `${cur.delivered} delivered this month` },
+    { label: "Average time to complete", value: cur.avgDays === null ? "—" : `${cur.avgDays.toFixed(1)} days`, hint: "From won deal to payment" },
+    { label: "Invoiced sales", value: <Money value={cur.invoiced} />, hint: "Sales invoices issued" },
+    { label: "Payments collected", value: <Money value={cur.collected} />, hint: "Official receipts issued" },
+    { label: "Low-stock items", value: lowStock.length, hint: "At or below reorder level now" },
+  ];
+  return (
+    <Card className={className}>
+      <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <CardTitle>Monthly metrics</CardTitle>
+          <CardDescription>Shared business and operations numbers for {MONTH.format(new Date(`${month}-01T00:00:00Z`))}</CardDescription>
+        </div>
+        <Select value={month} onValueChange={setMonth}>
+          <SelectTrigger className="h-9 w-44" aria-label="Month"><SelectValue /></SelectTrigger>
+          <SelectContent>{months.map((m) => <SelectItem key={m} value={m}>{MONTH.format(new Date(`${m}-01T00:00:00Z`))}</SelectItem>)}</SelectContent>
+        </Select>
+      </CardHeader>
+      <CardContent className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {tiles.map((t) => (
+          <div key={t.label} className="rounded-2xl bg-muted p-4">
+            <div className="text-xs text-muted-foreground">{t.label}</div>
+            <div className="mt-1.5 text-xl font-semibold tracking-tight tabular">{t.value}</div>
+            <div className="mt-0.5 text-xs text-muted-foreground">{t.hint}</div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------------------
+// Business overview pieces
+
+function OrdersByStep({ className }: { className?: string }) {
+  const orders = useOrders();
+  const steps = ORDER_STAGES.filter((s) => s !== "Done").map((stage) => ({ stage, count: orders.filter((o) => o.data.stage === stage).length }));
+  const max = Math.max(1, ...steps.map((s) => s.count));
+  return (
+    <Card className={className}>
+      <CardHeader>
+        <CardTitle>Open orders by step</CardTitle>
+        <CardDescription>Where each active order is waiting, and on whom</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {steps.map((s) => {
+          const owner = STAGE_INFO[s.stage].owner;
+          return (
+            <div key={s.stage} className="grid grid-cols-[7.5rem_1fr_1.5rem] items-center gap-3 text-sm">
+              <span className="min-w-0 leading-tight">
+                <span className="block truncate">{s.stage}</span>
+                <span className="block truncate text-xs text-muted-foreground">{owner ? POSITION_LABEL[owner] : ""}</span>
+              </span>
+              <div className="h-2 rounded-full bg-muted">
+                <div className={cn("h-2 rounded-full transition-[width] duration-700 ease-fluid", s.stage === "On hold" ? "bg-destructive" : "bg-primary")} style={{ width: `${(s.count / max) * 100}%` }} />
+              </div>
+              <span className="text-right tabular">{s.count}</span>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
+function OrderRow({ o, extra, warning }: { o: RecordItem; extra?: React.ReactNode; warning?: string | null }) {
+  const owner = STAGE_INFO[o.data.stage as OrderStage]?.owner;
+  return (
+    <Link to="/orders/$orderId" params={{ orderId: o.id }} className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors duration-200 hover:bg-muted">
+      <span className="min-w-0 flex-1">
+        <span className="block truncate"><span className="font-medium">{o.data.order_no}</span> <span className="text-muted-foreground">{o.data.customer}</span></span>
+        <span className="block truncate text-xs text-muted-foreground">
+          {o.data.stage === "Done" ? "Completed" : `${o.data.stage} · waiting on ${owner ? POSITION_LABEL[owner] : "—"}`}
+        </span>
+        {warning && <span className="mt-0.5 flex items-center gap-1 text-xs text-warning"><Clock className="h-3 w-3 shrink-0" /><span className="truncate">{warning}</span></span>}
+      </span>
+      {extra && <span className="flex shrink-0 items-center gap-2">{extra}</span>}
+    </Link>
+  );
+}
+
+function AttentionCard({ title, description, empty, children, count, action }: {
+  title: string; description: string; empty: string; count: number; children: React.ReactNode; action?: React.ReactNode;
+}) {
+  return (
+    <Card>
+      <CardHeader className="flex-row items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <CardTitle className="flex items-center gap-2">
+            {title}
+            {count > 0 && <span className="rounded-full bg-warning/15 px-2 py-0.5 text-xs tabular text-warning">{count}</span>}
+          </CardTitle>
+          <CardDescription>{description}</CardDescription>
+        </div>
+        {action}
+      </CardHeader>
+      <CardContent>
+        {count === 0 ? (
+          <p className="flex items-center gap-2 rounded-xl bg-success/5 px-3 py-2.5 text-sm text-success"><CheckCircle2 className="h-4 w-4" />{empty}</p>
+        ) : <div className="flex flex-col gap-0.5">{children}</div>}
+      </CardContent>
+    </Card>
+  );
+}
+
+function useAttention() {
+  const orders = useOrders();
+  const lowStock = useLowStock();
+  const syncOps = useApp((s) => s.syncOps);
+  const rejected = useApp((s) => s.rejected);
+  const batches = useApp((s) => s.batches);
+  return useMemo(() => {
+    const active = orders.filter(open);
+    const delayed = active.filter((o) => delayReason(o)).map((o) => ({ o, why: delayReason(o)! }));
+    const unpaid = orders.filter((o) => o.data.payment !== "Paid").sort((a, b) => Number(b.data.stage === "Collection") - Number(a.data.stage === "Collection"));
+    const syncIssues = syncOps.filter((o) => o.status === "conflict" || o.status === "failed");
+    const openRejected = rejected.filter((r) => r.status === "open");
+    const lastBatch = batches[0];
+    const batchIssues = lastBatch ? lastBatch.outcomes.filter((x) => x.result !== "success") : [];
+    const queues = POSITIONS.map((p) => ({ p, orders: active.filter((o) => STAGE_INFO[o.data.stage as OrderStage]?.owner === p) }));
+    const total = delayed.length + unpaid.filter((o) => o.data.stage === "Collection").length + syncIssues.length + openRejected.length + batchIssues.length + lowStock.length;
+    return { active, delayed, unpaid, syncIssues, openRejected, lastBatch, batchIssues, queues, lowStock, total };
+  }, [orders, lowStock, syncOps, rejected, batches]);
+}
+
+function NeedsAttention() {
+  const a = useAttention();
+  const receivable = a.unpaid.filter((o) => o.data.stage === "Collection");
+  const technical = a.syncIssues.length + a.openRejected.length + a.batchIssues.length;
+  return (
+    <div className="grid gap-4">
+      <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+        <StatCard label="Delayed orders" value={a.delayed.length} icon={<Clock />} tone={a.delayed.length ? "warning" : "success"} hint={`${a.active.length - a.delayed.length} of ${a.active.length} on track`} />
+        <StatCard label="Unpaid orders" value={a.unpaid.length} icon={<Wallet />} tone={receivable.length ? "warning" : "default"} hint={<>{receivable.length} delivered, awaiting payment</>} />
+        <StatCard label="Sync and batch issues" value={technical} icon={<GitMerge />} tone={technical ? "danger" : "success"} hint="Conflicts, failures, rejected rows" />
+        <StatCard label="Low-stock items" value={a.lowStock.length} icon={<PackageX />} tone={a.lowStock.length ? "warning" : "success"} hint="At or below reorder level" />
+      </div>
+      <div className="stagger grid gap-4 lg:grid-cols-2">
+        <AttentionCard title="Pending tasks by role" description="Open orders waiting for each Operations role" empty="No pending tasks" count={a.active.length}>
+          {a.queues.map(({ p, orders }) => (
+            <div key={p} className="flex items-start justify-between gap-3 rounded-xl px-3 py-2.5 text-sm">
+              <span className="font-medium">{POSITION_LABEL[p]}</span>
+              <span className="flex flex-wrap justify-end gap-1.5">
+                {orders.length === 0 ? <span className="text-xs text-muted-foreground">Nothing waiting</span> : orders.map((o) => (
+                  <Link key={o.id} to="/orders/$orderId" params={{ orderId: o.id }} className={cn("rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors", delayReason(o) ? "bg-warning/15 text-warning hover:bg-warning/25" : "bg-muted hover:bg-accent")}>
+                    {o.data.order_no}
+                  </Link>
+                ))}
+              </span>
+            </div>
+          ))}
+        </AttentionCard>
+        <AttentionCard title="Delayed orders" description="Past due, on hold, or stuck in one step" empty="Every order is on schedule" count={a.delayed.length}>
+          {a.delayed.map(({ o, why }) => <OrderRow key={o.id} o={o} warning={why} />)}
+        </AttentionCard>
+        <AttentionCard title="Unpaid transactions" description="Delivered orders awaiting payment are listed first" empty="Every order is paid" count={a.unpaid.length}>
+          {a.unpaid.map((o) => (
+            <OrderRow key={o.id} o={o} extra={<>{o.data.stage === "Collection" && <Badge variant="warning">Delivered</Badge>}<Money value={o.data.amount} className="text-xs" /></>} />
+          ))}
+        </AttentionCard>
+        <AttentionCard
+          title="Sync and batch issues" description="Records that failed to sync, load, or process" empty="Everything synced and processed" count={technical}
+          action={technical > 0 ? <Button asChild variant="outline" size="sm"><Link to="/sync">Open Sync center</Link></Button> : undefined}
+        >
+          {a.syncIssues.map((op) => (
+            <Link key={op.id} to="/sync" className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-muted">
+              <span><span className="font-medium">{op.recordLabel}</span> <span className="text-muted-foreground">{op.status === "conflict" ? "changed in both systems" : "write-back failed"}</span></span>
+              <Badge variant={op.status === "conflict" ? "warning" : "destructive"}>{op.status === "conflict" ? "Conflict" : "Failed"}</Badge>
+            </Link>
+          ))}
+          {a.openRejected.map((r) => (
+            <Link key={r.id} to="/pipeline" className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-muted">
+              <span className="min-w-0"><span className="font-medium">Rejected row {r.rowIndex}</span> <span className="block truncate text-xs text-muted-foreground">{r.errors[0]}</span></span>
+              <Badge variant="warning">Rejected</Badge>
+            </Link>
+          ))}
+          {a.batchIssues.map((x, i) => (
+            <Link key={`${x.label}-${i}`} to="/sync" className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-muted">
+              <span className="min-w-0"><span className="font-medium">{x.label}</span> <span className="block truncate text-xs text-muted-foreground">Last batch: {x.message}</span></span>
+              <Badge variant={x.result === "failed" ? "destructive" : "warning"}>{x.result === "failed" ? "Failed" : "Needs action"}</Badge>
+            </Link>
+          ))}
+        </AttentionCard>
+        <AttentionCard title="Low stock" description="Items to reorder before they run out" empty="Stock levels are healthy" count={a.lowStock.length}>
+          {a.lowStock.map((r) => (
+            <Link key={r.id} to="/modules/$moduleId" params={{ moduleId: "ims" }} className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-muted">
+              <span><span className="font-medium">{r.data.name}</span> <span className="text-muted-foreground">{r.data.sku}</span></span>
+              <span className="text-xs text-muted-foreground"><span className="font-medium text-warning tabular">{r.data.on_hand}</span> left · reorder at {r.data.reorder_level}</span>
+            </Link>
+          ))}
+        </AttentionCard>
+      </div>
+    </div>
+  );
+}
+
+function WaitingOnYou({ className }: { className?: string }) {
+  const me = useMe()!;
+  const orders = useOrders();
+  const mine = orders.filter((o) => open(o) && STAGE_INFO[o.data.stage as OrderStage]?.owner === me.position);
+  return (
+    <Card className={className}>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          Waiting on you
+          {mine.length > 0 && <span className="rounded-full bg-primary px-2 py-0.5 text-xs tabular text-primary-foreground">{mine.length}</span>}
+        </CardTitle>
+        <CardDescription>Orders at a step your role ({me.position ? POSITION_LABEL[me.position] : "unassigned"}) completes</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {mine.length === 0 ? (
+          <p className="flex items-center gap-2 rounded-xl bg-success/5 px-3 py-2.5 text-sm text-success"><CheckCircle2 className="h-4 w-4" />Nothing is waiting on you right now</p>
+        ) : (
+          <div className="flex flex-col gap-0.5">
+            {mine.map((o) => <OrderRow key={o.id} o={o} warning={delayReason(o)} extra={<StageBadge stage={String(o.data.stage)} />} />)}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------------------
+// Reused system pieces
 
 const tooltipStyle = {
   background: "hsl(var(--popover))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 12, color: "hsl(var(--popover-foreground))",
@@ -70,62 +430,6 @@ function PipelineChart() {
   );
 }
 
-function OrdersByStage({ className }: { className?: string }) {
-  const { byStage } = useOpsMetrics();
-  const max = Math.max(1, ...byStage.map((s) => s.count));
-  return (
-    <Card className={className}>
-      <CardHeader>
-        <CardTitle>Orders by stage</CardTitle>
-        <CardDescription>Where every active order is right now</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        {byStage.map((s) => (
-          <div key={s.stage} className="grid grid-cols-[8.5rem_1fr_2rem] items-center gap-3 text-sm">
-            <span className="truncate text-muted-foreground">{s.stage}</span>
-            <div className="h-2 rounded-full bg-muted">
-              <div className={cn("h-2 rounded-full", s.stage === "Delivered" ? "bg-success" : "bg-primary")} style={{ width: `${(s.count / max) * 100}%` }} />
-            </div>
-            <span className="text-right tabular">{s.count}</span>
-          </div>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
-
-function AttentionList() {
-  const syncOps = useApp((s) => s.syncOps);
-  const rejected = useApp((s) => s.rejected);
-  const { lowStock } = useOpsMetrics();
-  const conflicts = syncOps.filter((o) => o.status === "conflict").length;
-  const failed = syncOps.filter((o) => o.status === "failed").length;
-  const open = rejected.filter((r) => r.status === "open").length;
-  const items = [
-    { show: conflicts > 0, to: "/sync", icon: <GitMerge />, text: `${conflicts} sync conflict${conflicts > 1 ? "s" : ""} to review`, tone: "warning" },
-    { show: failed > 0, to: "/sync", icon: <AlertTriangle />, text: `${failed} failed write-back${failed > 1 ? "s" : ""} to Bitrix24`, tone: "danger" },
-    { show: open > 0, to: "/pipeline", icon: <Workflow />, text: `${open} rejected row${open > 1 ? "s" : ""} in the ledger`, tone: "warning" },
-    { show: lowStock.length > 0, to: "/modules/ims", icon: <PackageX />, text: `${lowStock.length} item${lowStock.length > 1 ? "s" : ""} at or below reorder level`, tone: "warning" },
-  ].filter((i) => i.show);
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Needs attention</CardTitle>
-        <CardDescription>{items.length ? "Resolve these to keep data accurate" : "Nothing needs your review"}</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-1">
-        {items.map((i) => (
-          <Link key={i.text} to={i.to} className="group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors duration-200 hover:bg-muted [&_svg]:size-4">
-            <span className={i.tone === "danger" ? "text-destructive" : "text-warning"}>{i.icon}</span>
-            <span className="flex-1">{i.text}</span>
-            <ChevronRight className="text-muted-foreground transition-transform duration-200 ease-fluid group-hover:translate-x-0.5" />
-          </Link>
-        ))}
-      </CardContent>
-    </Card>
-  );
-}
-
 function RecentActivity({ className }: { className?: string }) {
   const activity = useApp((s) => s.activity);
   const modules = useApp((s) => s.modules);
@@ -135,11 +439,10 @@ function RecentActivity({ className }: { className?: string }) {
     <Card className={className}>
       <CardHeader className="flex-row items-center justify-between">
         <div className="flex flex-col gap-1">
-          <CardTitle>Recent activity</CardTitle>
-          <CardDescription>Latest changes across your modules</CardDescription>
+          <CardTitle>System activity</CardTitle>
+          <CardDescription>Syncs, pipeline runs, and alerts</CardDescription>
         </div>
-        <Link to="/activity" className="text-sm text-primary hover:underline">View all</Link>
-      </CardHeader>
+        </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {visible.map((e) => (
           <div key={e.id} className="flex gap-3 text-sm">
@@ -236,16 +539,16 @@ function AdminOverview() {
   );
 }
 
+
 export function OverviewPage() {
   const me = useMe()!;
-  const { inProgress, dueSoon, lowStock, orders } = useOpsMetrics();
+  const orders = useOrders();
+  const lowStock = useLowStock();
   const runs = useApp((s) => s.pipelineRuns);
   const syncOps = useApp((s) => s.syncOps);
-  const week = Date.now() - 7 * 86_400_000;
-  const recentRuns = runs.filter((r) => new Date(r.startedAt).getTime() > week);
-  const total = recentRuns.reduce((a, r) => a + r.total, 0);
-  const loaded = recentRuns.reduce((a, r) => a + r.loaded, 0);
-  const issues = syncOps.filter((o) => o.status === "conflict" || o.status === "failed").length;
+  const rejected = useApp((s) => s.rejected);
+  const outage = useApp((s) => s.outage);
+  const attention = useAttention();
   const hour = Number(new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", hour: "numeric", hour12: false }).format(new Date()));
   const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
   const first = me.name.split(" ")[0];
@@ -259,42 +562,81 @@ export function OverviewPage() {
     );
   }
 
-  const isHead = can(me, "sync.manage");
-  const delivered = orders.filter((o) => o.data.stage === "Delivered").length;
+  const active = orders.filter(open);
+  const thisMonth = monthKey(new Date());
+  const completedThisMonth = orders.filter((o) => o.data.stage === "Done" && monthKey(o.order!.log.at(-1)!.at) === thisMonth).length;
+
+  if (!can(me, "sync.manage")) {
+    const mine = active.filter((o) => STAGE_INFO[o.data.stage as OrderStage]?.owner === me.position);
+    return (
+      <>
+        <PageHeader title={`${greeting}, ${first}`} description={`${titleOf(me)} · your tasks and today's numbers`} />
+        <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+          <StatCard label="Waiting on you" value={mine.length} icon={<Hourglass />} tone={mine.length ? "warning" : "success"} hint="Orders at your step" />
+          <StatCard label="Orders in progress" value={active.length} icon={<Truck />} hint="Across all roles" />
+          <StatCard label="Completed this month" value={completedThisMonth} icon={<UserCheck />} tone="success" hint="Delivered and paid" />
+          <StatCard label="Low-stock items" value={lowStock.length} icon={<PackageX />} tone={lowStock.length ? "warning" : "default"} hint="At or below reorder level" />
+        </div>
+        <div className="stagger mt-4 grid gap-4 lg:grid-cols-3">
+          <WaitingOnYou className="lg:col-span-1" />
+          <DailySummary className="lg:col-span-2" />
+          <MonthlyMetrics className="lg:col-span-3" />
+        </div>
+      </>
+    );
+  }
+
+  const week = Date.now() - 7 * DAY_MS;
+  const recentRuns = runs.filter((r) => new Date(r.startedAt).getTime() > week);
+  const total = recentRuns.reduce((a, r) => a + r.total, 0);
+  const loaded = recentRuns.reduce((a, r) => a + r.loaded, 0);
+  const issues = syncOps.filter((o) => o.status === "conflict" || o.status === "failed").length;
+  const openRejected = rejected.filter((r) => r.status === "open").length;
+  const unpaidDelivered = orders.filter((o) => o.data.stage === "Collection");
+
   return (
     <>
-      <PageHeader title={`${greeting}, ${first}`} description={isHead ? "Operations at a glance and anything that needs your review." : "Your orders and stock at a glance."} />
-      <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <StatCard label="Orders in progress" value={inProgress.length} icon={<Truck />} hint={`${dueSoon.length} due within 2 days`} />
-        <StatCard label="Low-stock items" value={lowStock.length} icon={<PackageX />} tone={lowStock.length ? "warning" : "default"} hint="At or below reorder level" />
-        {isHead ? (
-          <>
+      <PageHeader title={`${greeting}, ${first}`} description="Business performance, operations, and what needs your decision." />
+      <Tabs defaultValue="general">
+        <TabsList className="mb-0">
+          <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="attention">
+            <span className="sm:hidden">Attention</span><span className="hidden sm:inline">Needs attention</span>
+            {attention.total > 0 && <span className="rounded-full bg-warning/15 px-1.5 text-xs tabular text-warning">{attention.total}</span>}
+          </TabsTrigger>
+          <TabsTrigger value="technical">Technical</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="general" className="grid gap-4">
+          <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+            <StatCard label="Orders in progress" value={active.length} icon={<Truck />} hint={`${active.length - attention.delayed.length} on track`} />
+            <StatCard label="Completed this month" value={completedThisMonth} icon={<UserCheck />} tone="success" hint="Delivered and paid" />
+            <StatCard label="Awaiting payment" value={unpaidDelivered.length} icon={<Wallet />} tone={unpaidDelivered.length ? "warning" : "default"} hint={<><Money value={unpaidDelivered.reduce((a, o) => a + Number(o.data.amount), 0)} /> receivable</>} />
+            <StatCard label="Delayed orders" value={attention.delayed.length} icon={<Clock />} tone={attention.delayed.length ? "warning" : "success"} hint="See Needs attention" />
+          </div>
+          <div className="stagger grid gap-4 lg:grid-cols-3">
+            <DailySummary className="lg:col-span-2" />
+            <OrdersByStep />
+            <MonthlyMetrics className="lg:col-span-3" />
+          </div>
+        </TabsContent>
+
+        <TabsContent value="attention"><NeedsAttention /></TabsContent>
+
+        <TabsContent value="technical" className="grid gap-4">
+          <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             <StatCard label="Pipeline success" value={total ? `${Math.round((loaded / total) * 100)}%` : "—"} icon={<Workflow />} hint={`${total - loaded} of ${total} rows rejected this week`} />
             <StatCard label="Sync issues" value={issues} icon={<GitMerge />} tone={issues ? "warning" : "success"} hint="Conflicts and failed write-backs" />
-          </>
-        ) : (
-          <>
-            <StatCard label="Due within 2 days" value={dueSoon.length} icon={<Clock />} tone={dueSoon.length ? "warning" : "default"} hint="Not yet delivered" />
-            <StatCard label="Delivered" value={delivered} icon={<UserCheck />} tone="success" hint="Completed orders" />
-          </>
-        )}
-      </div>
-      <div className="stagger mt-4 grid gap-4 lg:grid-cols-3">
-        {isHead ? (
-          <>
+            <StatCard label="Rejected rows" value={openRejected} icon={<AlertTriangle />} tone={openRejected ? "warning" : "success"} hint="Waiting in the ledger" />
+            <StatCard label="Bitrix24" value={outage ? "Offline" : "Online"} icon={<ShieldOff />} tone={outage ? "danger" : "success"} hint="API adapter, two-way sync" />
+          </div>
+          <div className="stagger grid gap-4 lg:grid-cols-3">
             <PipelineChart />
-            <AttentionList />
-            <OrdersByStage />
-            <RecentActivity className="lg:col-span-2" />
+            <RecentActivity />
             <ModuleHealth />
-          </>
-        ) : (
-          <>
-            <OrdersByStage className="lg:col-span-1" />
-            <RecentActivity className="lg:col-span-2" />
-          </>
-        )}
-      </div>
+          </div>
+        </TabsContent>
+      </Tabs>
     </>
   );
 }
