@@ -22,6 +22,7 @@ export default {
         card: { DEFAULT: "hsl(var(--card))", foreground: "hsl(var(--card-foreground))" },
         success: "hsl(var(--success))",
         warning: "hsl(var(--warning))",
+        info: "hsl(var(--info))",
         sidebar: { DEFAULT: "hsl(var(--sidebar))", border: "hsl(var(--sidebar-border))" },
       },
       borderRadius: { lg: "var(--radius)", md: "calc(var(--radius) - 2px)", sm: "calc(var(--radius) - 4px)" },
