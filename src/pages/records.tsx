@@ -191,7 +191,7 @@ export function RecordsPage() {
               {records.map((r) => (
                 <li key={r.id} className="flex items-start gap-2 py-3 pl-4 pr-2">
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm"><Cell field={primaryField} rec={r} /></div>
+                    <div className="text-sm [&>span]:max-w-full"><Cell field={primaryField} rec={r} /></div>
                     <dl className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
                       {cardFields.map((f) => (
                         <div key={f.key} className="flex min-w-0 items-center gap-1.5">
