@@ -34,7 +34,7 @@ function ConflictCard({ op }: { op: SyncOperation }) {
         </div>
       </CardHeader>
       <CardContent className="grid gap-4">
-        <div className="overflow-x-auto rounded-lg border">
+        <div className="overflow-x-auto rounded-2xl bg-muted">
           <table className="w-full text-sm">
             <thead><tr className="border-b text-left text-xs text-muted-foreground">
               <th className="px-2 py-2 font-medium sm:px-3">Field</th><th className="px-2 py-2 font-medium sm:px-3">Zentra</th><th className="px-2 py-2 font-medium sm:px-3">{mod.source}</th>
