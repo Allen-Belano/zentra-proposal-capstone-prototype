@@ -5,7 +5,8 @@ import { AlertTriangle, ChevronRight, Clock, GitMerge, PackageX, ShieldOff, Truc
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { LevelDot, PageHeader, StatCard } from "@/components/app/bits";
-import { ORDER_STAGES } from "@/data/seed";
+import { ORDER_STAGES as FLOW } from "@/lib/orders";
+const ORDER_STAGES: string[] = [...FLOW];
 import { ROLE_LABEL, can, moduleAccess } from "@/lib/rbac";
 import type { RecordItem } from "@/lib/types";
 import { cn, formatDateTime, timeAgo } from "@/lib/utils";
