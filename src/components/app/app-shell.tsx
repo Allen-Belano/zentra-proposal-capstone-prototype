@@ -215,9 +215,10 @@ export function AppShell() {
   if (!me) return null;
 
   return (
-    <div className="flex h-full">
+    <div className="flex min-h-full">
+      {/* min-h-full (not h-full) lets the page grow past the viewport, so the sidebar stays put while scrolling. */}
       <aside className={cn(
-        "safe-top sticky top-3 my-3 ml-3 hidden h-[calc(100dvh-1.5rem)] shrink-0 flex-col overflow-hidden rounded-3xl border border-sidebar-border bg-sidebar shadow-soft transition-[width] duration-300 ease-fluid lg:flex",
+        "safe-top sticky top-3 my-3 ml-3 hidden h-[calc(100dvh-1.5rem)] shrink-0 self-start flex-col overflow-hidden rounded-3xl border border-sidebar-border bg-sidebar shadow-soft transition-[width] duration-300 ease-fluid lg:flex",
         collapsed ? "w-[72px]" : "w-64",
       )}>
         <div className={cn("flex h-16 items-center px-6", collapsed && "justify-center px-0")}>
