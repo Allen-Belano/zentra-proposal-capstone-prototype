@@ -10,6 +10,7 @@ import { ActivityPage } from "@/pages/activity";
 import { AuditPage } from "@/pages/audit";
 import { BackupsPage } from "@/pages/backups";
 import { LoginPage } from "@/pages/login";
+import { OrderDetailPage } from "@/pages/order-detail";
 import { OverviewPage } from "@/pages/overview";
 import { PipelinePage } from "@/pages/pipeline";
 import { RecordsPage } from "@/pages/records";
@@ -66,6 +67,7 @@ const routeTree = rootRoute.addChildren([
     page("/", OverviewPage),
     page("/modules/$moduleId", RecordsPage),
     page("/activity", () => <Guard perm="activity.view"><ActivityPage /></Guard>),
+    page("/orders/$orderId", () => <Guard perm="activity.view"><OrderDetailPage /></Guard>),
     page("/pipeline", () => <Guard perm="pipeline.manage"><PipelinePage /></Guard>),
     page("/sync", () => <Guard perm="sync.manage"><SyncPage /></Guard>),
     page("/registry", () => <Guard perm="modules.manage"><RegistryPage /></Guard>),
