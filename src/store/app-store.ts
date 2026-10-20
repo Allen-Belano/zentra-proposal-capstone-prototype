@@ -56,7 +56,7 @@ interface AppState extends Omit<Seed, "backupSchedule"> {
   addRule: (rule: Omit<ValidationRule, "id" | "enabled">) => void;
   removeRule: (ruleId: string) => void;
 
-  registerModule: (mod: ModuleDef) => Result;
+  registerModule: (mod: ModuleDef, rules?: { field: string; kind: ValidationRule["kind"]; value?: string }[]) => Result;
   setModuleActive: (moduleId: string, active: boolean) => void;
   setModuleFrequency: (moduleId: string, f: SyncFrequency) => void;
 
@@ -502,15 +502,20 @@ export const useApp = create<AppState>()(
           audit("Removed validation rule", `${mod(r.moduleId).name}: ${r.field} (${r.kind})`);
         },
 
-        registerModule: (m) => {
-          if (get().modules.some((x) => x.id === m.id)) return { ok: false, errors: [`A module with id "${m.id}" already exists.`] };
-          const full: ModuleDef = { ...m, registeredAt: now(), registeredBy: actorName() };
+        registerModule: (m, rules = []) => {
+          if (!can(me(), "modules.manage")) return { ok: false, errors: ["Only Department Heads can register modules."] };
+          if (get().modules.some((x) => x.id === m.id)) return { ok: false, errors: [`A module with the key "${m.id}" already exists.`] };
+          const full: ModuleDef = { ...m, registeredAt: now(), registeredBy: actorName(), lastSyncedAt: m.kind === "external" ? now() : undefined };
           set((s) => ({
             modules: [...s.modules, full],
+            rules: [...s.rules, ...rules.map((r) => ({ ...r, id: uid("r-"), moduleId: m.id, enabled: true }))],
             users: s.users.map((u) => (u.role === "employee" ? { ...u, moduleAccess: { ...u.moduleAccess, [m.id]: "none" } } : u)),
           }));
-          event({ moduleId: m.id, title: `${m.name} module registered`, detail: "Activated from manifest without redeploying", level: "success" });
-          audit("Registered module", m.name);
+          event({
+            moduleId: m.id, title: `${m.name} module registered`, level: "success",
+            detail: `${m.active ? "Activated" : "Saved inactive"} without redeploying · ${rules.length} validation rule${rules.length === 1 ? "" : "s"}`,
+          });
+          audit("Registered module", `${m.name} (${m.kind === "native" ? "native" : `${m.adapter.type} adapter`})`);
           return { ok: true };
         },
         setModuleActive: (moduleId, active) => {
@@ -580,8 +585,8 @@ export const useApp = create<AppState>()(
       };
     },
     {
-      // v2: Operations positions, order flow, notifications. Older saved demos start fresh.
-      name: "zentra-demo-v2",
+      // v3: module owners, adapter connections, and field mappings. Older saved demos start fresh.
+      name: "zentra-demo-v3",
       storage: createJSONStorage(() => {
         try {
           localStorage.setItem("__t", "1");
