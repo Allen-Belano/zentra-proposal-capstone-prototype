@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState, PageHeader } from "@/components/app/bits";
-import { ROLE_LABEL } from "@/lib/rbac";
+import { ROLE_LABEL, ROLE_SHORT_LABEL } from "@/lib/rbac";
 import type { Role } from "@/lib/types";
 import { formatDateTime } from "@/lib/utils";
 import { useApp } from "@/store/app-store";
@@ -38,7 +38,7 @@ export function AuditPage() {
           <Table>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead>When</TableHead>
+                <TableHead className="hidden sm:table-cell">When</TableHead>
                 <TableHead>Who</TableHead>
                 <TableHead>Action</TableHead>
                 <TableHead className="hidden md:table-cell">Target</TableHead>
@@ -47,10 +47,13 @@ export function AuditPage() {
             <TableBody>
               {list.map((a) => (
                 <TableRow key={a.id}>
-                  <TableCell className="whitespace-nowrap text-muted-foreground">{formatDateTime(a.at)}</TableCell>
+                  <TableCell className="hidden whitespace-nowrap text-muted-foreground sm:table-cell">{formatDateTime(a.at)}</TableCell>
                   <TableCell>
                     <div className="font-medium">{a.actor}</div>
-                    <Badge variant="secondary" className="mt-0.5">{ROLE_LABEL[a.role]}</Badge>
+                    <Badge variant="secondary" className="mt-0.5">
+                      <span className="sm:hidden">{ROLE_SHORT_LABEL[a.role]}</span><span className="hidden sm:inline">{ROLE_LABEL[a.role]}</span>
+                    </Badge>
+                    <div className="mt-1 whitespace-nowrap text-xs text-muted-foreground sm:hidden">{formatDateTime(a.at)}</div>
                   </TableCell>
                   <TableCell>
                     {a.action}
