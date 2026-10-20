@@ -169,9 +169,9 @@ function RejectedTab() {
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead>Record</TableHead>
-              <TableHead>Why it was rejected</TableHead>
+              <TableHead className="hidden sm:table-cell">Why it was rejected</TableHead>
               <TableHead className="hidden md:table-cell">Source</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead className="hidden sm:table-cell">Status</TableHead>
               <TableHead className="w-10"><span className="sr-only">Actions</span></TableHead>
             </TableRow>
           </TableHeader>
@@ -179,22 +179,25 @@ function RejectedTab() {
             {list.map((r) => {
               const m = modules.find((x) => x.id === r.moduleId);
               const run = runs.find((x) => x.id === r.runId);
+              const errors = <ul className="text-sm text-destructive">{r.errors.map((e) => <li key={e}>{e}</li>)}</ul>;
+              const status = (
+                <Badge variant={r.status === "open" ? "warning" : r.status === "reloaded" ? "success" : "secondary"}>
+                  {r.status === "open" ? "Open" : r.status === "reloaded" ? "Reloaded" : "Dismissed"}
+                </Badge>
+              );
               return (
                 <TableRow key={r.id}>
                   <TableCell>
                     <div className="font-medium">{recordLabel(m, r.raw) || "(blank)"}</div>
                     <div className="text-xs text-muted-foreground">{m?.name} · row {r.rowIndex}</div>
+                    <div className="mt-1.5 grid justify-items-start gap-1.5 sm:hidden">{errors}{status}</div>
                   </TableCell>
-                  <TableCell className="max-w-xs"><ul className="text-sm text-destructive">{r.errors.map((e) => <li key={e}>{e}</li>)}</ul></TableCell>
+                  <TableCell className="hidden max-w-xs sm:table-cell">{errors}</TableCell>
                   <TableCell className="hidden text-sm text-muted-foreground md:table-cell">
                     {run ? `Run #${run.number} · ${run.source}` : "—"}
                     <div className="text-xs">{formatDateTime(r.createdAt)}</div>
                   </TableCell>
-                  <TableCell>
-                    <Badge variant={r.status === "open" ? "warning" : r.status === "reloaded" ? "success" : "secondary"}>
-                      {r.status === "open" ? "Open" : r.status === "reloaded" ? "Reloaded" : "Dismissed"}
-                    </Badge>
-                  </TableCell>
+                  <TableCell className="hidden sm:table-cell">{status}</TableCell>
                   <TableCell>
                     {r.status === "open" && (
                       <div className="flex gap-1">
