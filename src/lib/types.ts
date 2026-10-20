@@ -1,5 +1,7 @@
 export type Role = "super_admin" | "dept_head" | "employee";
 export type ModuleAccess = "none" | "view" | "edit";
+/** The five Operations positions. Each Department Employee holds exactly one. */
+export type Position = "accounting" | "purchasing" | "inventory" | "invoicing" | "delivery";
 
 export interface User {
   id: string;
@@ -10,7 +12,11 @@ export interface User {
   department: string;
   status: "active" | "disabled";
   lastActiveAt: string;
-  /** Per-module access for Department Employees, set by their Department Head. */
+  /** Operations position for Department Employees; it decides their module access and order steps. */
+  position?: Position;
+  /** Explicit grant from the Super Admin to see amounts, costs, and receivables. */
+  financialAccess?: boolean;
+  /** Access to modules registered after the baseline, set by their Department Head. */
   moduleAccess: Record<string, ModuleAccess>;
 }
 
@@ -27,6 +33,8 @@ export interface ModuleField {
   hideOnMobile?: boolean;
   /** Hidden below extra-large screens. */
   hideOnTablet?: boolean;
+  /** Money that only users with financial access may see. */
+  financial?: boolean;
 }
 
 export type AdapterType = "native" | "api" | "database" | "webhook" | "file";
@@ -51,10 +59,42 @@ export interface ModuleDef {
 
 export type SyncState = "local" | "synced" | "pending" | "conflict" | "failed";
 
+/** Documents produced along the order flow. */
+export interface OrderDocs {
+  clientPo?: string;
+  supplierPo?: string;
+  rr?: string;
+  si?: string;
+  wr?: string;
+  dr?: string;
+  /** Official receipt or reference for the payment. */
+  payment?: string;
+}
+
+/** One completed step in an order's life, written in plain business language. */
+export interface OrderLogEntry {
+  id: string;
+  /** Stage the order was in when this happened. */
+  stage: string;
+  description: string;
+  by: string;
+  position?: Position;
+  role: Role | "system";
+  at: string;
+  note?: string;
+}
+
+export interface OrderProcess {
+  docs: OrderDocs;
+  log: OrderLogEntry[];
+}
+
 export interface RecordItem {
   id: string;
   moduleId: string;
   data: Record<string, string | number>;
+  /** Present on Operations orders: documents and the step-by-step history. */
+  order?: OrderProcess;
   archived: boolean;
   syncState: SyncState;
   externalId?: string;
@@ -154,4 +194,31 @@ export interface Backup {
 export interface RemoteRecord {
   data: Record<string, string | number>;
   version: number;
+}
+
+/** A heads-up for a position or role, e.g. when an order is forwarded to them. */
+export interface AppNotification {
+  id: string;
+  to: { position?: Position; role?: Role };
+  title: string;
+  detail?: string;
+  orderId?: string;
+  at: string;
+  readBy: string[];
+}
+
+export type BatchItemKind = "writeback" | "conflict" | "rejected";
+
+export interface BatchOutcome {
+  label: string;
+  type: string;
+  result: "success" | "failed" | "action";
+  message: string;
+}
+
+export interface BatchRun {
+  id: string;
+  at: string;
+  by: string;
+  outcomes: BatchOutcome[];
 }
