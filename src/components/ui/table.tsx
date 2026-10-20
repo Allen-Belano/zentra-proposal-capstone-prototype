@@ -16,8 +16,8 @@ export const TableRow = ({ className, ...p }: React.HTMLAttributes<HTMLTableRowE
   <tr className={cn("border-b transition-colors hover:bg-muted/50", className)} {...p} />
 );
 export const TableHead = ({ className, ...p }: React.ThHTMLAttributes<HTMLTableCellElement>) => (
-  <th className={cn("h-10 px-3 text-left align-middle text-xs font-medium text-muted-foreground whitespace-nowrap", className)} {...p} />
+  <th className={cn("h-10 px-2 text-left align-middle text-xs font-medium text-muted-foreground whitespace-nowrap sm:px-3", className)} {...p} />
 );
 export const TableCell = ({ className, ...p }: React.TdHTMLAttributes<HTMLTableCellElement>) => (
-  <td className={cn("px-3 py-2.5 align-middle", className)} {...p} />
+  <td className={cn("px-2 py-2.5 align-middle sm:px-3", className)} {...p} />
 );
