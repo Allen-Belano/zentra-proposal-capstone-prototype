@@ -2,9 +2,19 @@ import { useEffect, useState } from "react";
 
 export type Theme = "light" | "dark" | "system";
 
+let fadeTimer: ReturnType<typeof setTimeout> | undefined;
+
 function apply(theme: Theme) {
+  const root = document.documentElement;
   const dark = theme === "dark" || (theme === "system" && matchMedia("(prefers-color-scheme: dark)").matches);
-  document.documentElement.classList.toggle("dark", dark);
+  if (root.classList.contains("dark") === dark) return;
+  // Crossfade colors for a moment so switching themes feels smooth rather than a hard cut.
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    root.classList.add("theme-transition");
+    clearTimeout(fadeTimer);
+    fadeTimer = setTimeout(() => root.classList.remove("theme-transition"), 400);
+  }
+  root.classList.toggle("dark", dark);
 }
 
 export function useTheme() {

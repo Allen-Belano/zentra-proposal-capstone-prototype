@@ -64,6 +64,11 @@
     font-feature-settings: "cv11", "ss01";
   }
   :focus-visible { @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background; }
+  ::selection { background: hsl(var(--primary) / 0.18); }
+  /* Set briefly by the theme switcher so light and dark crossfade instead of snapping. */
+  .theme-transition, .theme-transition *, .theme-transition *::before, .theme-transition *::after {
+    transition: background-color 350ms ease, border-color 350ms ease, color 250ms ease, fill 250ms ease !important;
+  }
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
   }
