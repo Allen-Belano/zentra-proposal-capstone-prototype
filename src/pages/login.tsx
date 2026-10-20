@@ -27,7 +27,7 @@ function SourcesDiagram() {
     <div className="relative mt-10 grid grid-cols-[1fr_auto] items-center gap-8">
       <div className="flex flex-col gap-3">
         {sources.map((s) => (
-          <div key={s.label} className="flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-3">
+          <div key={s.label} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 backdrop-blur-sm">
             <span className="text-sky-300">{s.icon}</span>
             <div>
               <div className="text-sm font-medium text-white">{s.label}</div>
@@ -72,7 +72,7 @@ export function LoginPage() {
 
   return (
     <div className="grid min-h-full lg:grid-cols-[1.05fr_1fr]">
-      <section className="relative hidden overflow-hidden bg-[#0b1420] p-12 text-white lg:flex lg:flex-col">
+      <section className="relative m-3 hidden overflow-hidden rounded-3xl bg-gradient-to-br from-[#16303f] via-[#122634] to-[#0b1822] p-12 text-white shadow-float duration-700 [&_rect.fill-primary]:fill-[hsl(192_50%_42%)] ease-fluid animate-in fade-in-0 slide-in-from-left-4 lg:flex lg:flex-col">
         <div className="flex items-center gap-2.5"><ZentraMark /><span className="text-[17px] font-semibold">Zentra</span></div>
         <div className="mt-auto max-w-md">
           <h1 className="text-3xl font-semibold leading-tight tracking-tight">
@@ -87,7 +87,7 @@ export function LoginPage() {
       </section>
 
       <section className="safe-top flex min-w-0 items-center justify-center px-5 py-10 sm:px-10">
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-sm duration-700 ease-fluid animate-in fade-in-0 slide-in-from-bottom-3">
           <ZentraLogo className="mb-8 lg:hidden" />
           <h2 className="text-2xl font-semibold tracking-tight">Sign in</h2>
           <p className="mt-1 text-sm text-muted-foreground">Use your iFixz work account.</p>
@@ -108,14 +108,14 @@ export function LoginPage() {
           <div className="mt-8">
             <p className="text-sm font-medium">Demo accounts</p>
             <p className="mt-0.5 text-xs text-muted-foreground">Password for all three: <span className="font-medium text-foreground">{DEMO_PASSWORD}</span></p>
-            <div className="mt-3 flex flex-col gap-2">
+            <div className="stagger mt-3 flex flex-col gap-2">
               {DEMO.map((d) => (
                 <button
                   key={d.email}
                   type="button"
                   disabled={busy}
                   onClick={() => { setEmail(d.email); setPassword(DEMO_PASSWORD); submit(undefined, { email: d.email, password: DEMO_PASSWORD }); }}
-                  className={cn("flex items-center justify-between gap-3 rounded-lg border bg-card px-4 py-3 text-left transition-colors hover:border-primary/50 hover:bg-accent disabled:opacity-60")}
+                  className={cn("flex items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card px-4 py-3 text-left shadow-soft transition-[border-color,box-shadow,transform] duration-200 ease-fluid hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-float active:translate-y-0 disabled:opacity-60 dark:border-border")}
                 >
                   <div className="min-w-0">
                     <div className="text-sm font-medium">{ROLE_LABEL[d.role]}</div>
