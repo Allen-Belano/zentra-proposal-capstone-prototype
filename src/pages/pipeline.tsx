@@ -258,7 +258,7 @@ function RulesTab() {
           <SelectContent>{modules.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}</SelectContent>
         </Select>
       </CardHeader>
-      <CardContent className="grid gap-4">
+      <CardContent className="grid grid-cols-1 gap-4">
         <div className="divide-y divide-border/70 rounded-2xl bg-muted">
           {list.length === 0 && <EmptyState title="No rules yet" description="Add a rule below. Without rules, every row is accepted." />}
           {list.map((r) => (
@@ -274,7 +274,7 @@ function RulesTab() {
             </div>
           ))}
         </div>
-        <div className="grid gap-3 rounded-2xl border border-dashed p-4 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
+        <div className="grid grid-cols-1 gap-3 rounded-2xl border border-dashed p-4 sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-end">
           <div className="grid gap-2">
             <Label>Field</Label>
             <Select value={field} onValueChange={setField}>
@@ -351,7 +351,7 @@ export function PipelinePage() {
                       <div className="text-xs text-muted-foreground">{modules.find((m) => m.id === r.moduleId)?.name}</div>
                     </TableCell>
                     <TableCell>
-                      <div className="max-w-[7rem] truncate min-[360px]:max-w-[9rem] sm:max-w-[12rem]">{r.source}</div>
+                      <div className="max-w-[7rem] truncate min-[360px]:max-w-[9rem] xl:max-w-[12rem]">{r.source}</div>
                       <div className="text-xs text-muted-foreground">{r.runBy}</div>
                     </TableCell>
                     <TableCell className="text-right tabular">
