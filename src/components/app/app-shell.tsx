@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
-  Activity, DatabaseBackup, GitMerge, LayoutDashboard, LogOut, Menu, Monitor, Moon, PanelLeft, Puzzle,
+  Activity, ChevronDown, DatabaseBackup, GitMerge, LayoutDashboard, LogOut, Menu, Monitor, Moon, PanelLeft, Puzzle,
   RefreshCw, RotateCcw, ScrollText, ShieldCheck, Sun, Users, Workflow,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -109,18 +109,19 @@ function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="flex items-center gap-2 rounded-md p-1 pr-2 text-left transition-colors hover:bg-accent">
-          <Avatar><AvatarFallback>{initials}</AvatarFallback></Avatar>
+        <button className="group flex items-center gap-2.5 rounded-full border border-border/60 bg-card p-1 text-left shadow-soft transition-[background-color,box-shadow] duration-200 hover:shadow-float sm:pr-3 dark:border-border">
+          <Avatar className="h-9 w-9"><AvatarFallback>{initials}</AvatarFallback></Avatar>
           <span className="hidden flex-col leading-tight sm:flex">
             <span className="text-sm font-medium">{me.name}</span>
-            <span className="text-xs text-muted-foreground">{ROLE_LABEL[me.role]}</span>
+            <span className="text-xs text-muted-foreground">{me.email}</span>
           </span>
+          <ChevronDown className="hidden h-4 w-4 text-muted-foreground transition-transform duration-200 ease-fluid group-data-[state=open]:rotate-180 sm:block" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-60">
         <DropdownMenuLabel>
           <div className="font-medium">{me.name}</div>
-          <div className="text-xs font-normal text-muted-foreground">{me.email}</div>
+          <div className="text-xs font-normal text-muted-foreground">{ROLE_LABEL[me.role]} · {me.department}</div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => { resetDemo(); toast.success("Demo data reset"); }}>
@@ -139,7 +140,7 @@ function ThemeMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Change theme">
+        <Button variant="outline" size="icon" aria-label="Change theme">
           {theme === "light" ? <Sun /> : theme === "dark" ? <Moon /> : <Monitor />}
         </Button>
       </DropdownMenuTrigger>
@@ -158,10 +159,13 @@ function ConnectionPill() {
   if (!can(me, "sync.manage")) return null;
   return (
     <Link to="/sync" className={cn(
-      "hidden items-center gap-2 rounded-full border px-3 py-1 text-xs md:flex",
-      outage ? "border-destructive/40 text-destructive" : "text-muted-foreground",
+      "hidden h-9 items-center gap-2 rounded-full border border-border/60 bg-card px-3.5 text-xs shadow-soft transition-colors duration-200 md:flex dark:border-border",
+      outage ? "border-destructive/40 text-destructive" : "text-muted-foreground hover:text-foreground",
     )}>
-      <span className={cn("h-1.5 w-1.5 rounded-full", outage ? "bg-destructive" : "bg-success")} />
+      <span className="relative flex h-2 w-2">
+        <span className={cn("absolute inset-0 animate-ping rounded-full opacity-60 motion-reduce:hidden", outage ? "bg-destructive" : "bg-success")} />
+        <span className={cn("relative h-2 w-2 rounded-full", outage ? "bg-destructive" : "bg-success")} />
+      </span>
       {outage ? "Bitrix24 unreachable" : "Bitrix24 connected"}
     </Link>
   );
@@ -209,8 +213,8 @@ export function AppShell() {
       </Sheet>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="safe-top sticky top-0 z-30 border-b bg-background/85 backdrop-blur">
-          <div className="flex h-14 items-center gap-2 px-4 sm:px-6">
+        <header className="safe-top sticky top-0 z-30 bg-background/80 backdrop-blur-md">
+          <div className="flex h-16 items-center gap-2 px-4 sm:px-6 lg:mt-3">
             <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
               <Menu />
             </Button>
@@ -218,7 +222,7 @@ export function AppShell() {
               <PanelLeft />
             </Button>
             <div className="lg:hidden"><ZentraMark className="h-6 w-6" /></div>
-            <div className="ml-auto flex items-center gap-1.5">
+            <div className="ml-auto flex items-center gap-2">
               <ConnectionPill />
               <ThemeMenu />
               <UserMenu />
