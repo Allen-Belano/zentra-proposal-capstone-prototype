@@ -47,7 +47,7 @@ export function RecordForm({
         </DialogHeader>
         <form onSubmit={submit} className="grid gap-4">
           {errors.length > 0 && (
-            <div role="alert" className="flex gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+            <div role="alert" className="flex gap-2 rounded-xl border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
               <div>
                 <p className="font-medium">Didn't pass validation</p>

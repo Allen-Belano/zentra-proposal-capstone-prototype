@@ -114,7 +114,7 @@ export function RecordsPage() {
       />
 
       {external && outage && (
-        <div className="mb-4 flex items-start gap-3 rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm">
+        <div className="mb-4 flex items-start gap-3 rounded-2xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
           <CloudOff className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
           <div>
             <p className="font-medium">{mod.source} is unreachable</p>

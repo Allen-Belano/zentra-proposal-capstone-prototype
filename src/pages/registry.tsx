@@ -108,7 +108,7 @@ function RegisterDialog({ open, onOpenChange, atLimit }: { open: boolean; onOpen
         </DialogHeader>
         <Textarea value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} className="min-h-[320px] font-mono text-xs leading-relaxed" />
         {errors.length > 0 && (
-          <ul role="alert" className="list-disc rounded-md border border-destructive/40 bg-destructive/10 p-3 pl-7 text-sm text-destructive">
+          <ul role="alert" className="list-disc rounded-xl border border-destructive/40 bg-destructive/10 p-3 pl-7 text-sm text-destructive">
             {errors.map((e) => <li key={e}>{e}</li>)}
           </ul>
         )}
