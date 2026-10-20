@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { useParams } from "@tanstack/react-router";
-import { Archive, ArchiveRestore, CloudOff, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Zap } from "lucide-react";
+import { Link, useParams } from "@tanstack/react-router";
+import { Archive, ArchiveRestore, CloudOff, Eye, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,12 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useSyncNowToast } from "@/components/app/app-shell";
-import { EmptyState, PageHeader, SyncBadge } from "@/components/app/bits";
+import { EmptyState, Money, PageHeader, PaymentBadge, StageBadge, SyncBadge, useCanSeeMoney } from "@/components/app/bits";
 import { Forbidden } from "@/components/app/guard";
 import { RecordForm } from "@/components/app/record-form";
 import { can, moduleAccess } from "@/lib/rbac";
 import type { ModuleField, RecordItem } from "@/lib/types";
-import { cn, formatDate, formatPeso, timeAgo } from "@/lib/utils";
+import { cn, formatDate, timeAgo } from "@/lib/utils";
 import { useApp, useMe } from "@/store/app-store";
 
 // With the sidebar open, a 1280px laptop leaves about as much room as a tablet, so tablet-hidden columns wait for 2xl.
@@ -25,7 +25,7 @@ const hideCls = (f: ModuleField) =>
 function Cell({ field, rec }: { field: ModuleField; rec: RecordItem }) {
   const v = rec.data[field.key];
   if (v === "" || v === undefined) return <span className="text-muted-foreground">—</span>;
-  if (field.type === "currency") return <span className="tabular">{formatPeso(Number(v))}</span>;
+  if (field.type === "currency") return <Money value={v} />;
   if (field.type === "date") return <span className="whitespace-nowrap">{formatDate(String(v))}</span>;
   if (field.key === "on_hand") {
     const low = Number(v) <= Number(rec.data.reorder_level);
@@ -36,9 +36,17 @@ function Cell({ field, rec }: { field: ModuleField; rec: RecordItem }) {
       </span>
     );
   }
-  if (field.key === "stage") return <Badge variant={v === "Delivered" ? "success" : "secondary"}>{String(v)}</Badge>;
+  if (field.key === "stage" && rec.order) return <StageBadge stage={String(v)} />;
+  if (field.key === "payment" && rec.order) return <PaymentBadge status={String(v)} />;
+  if (field.primary && rec.order) {
+    return (
+      <Link to="/orders/$orderId" params={{ orderId: rec.id }} className="font-medium text-primary underline-offset-4 hover:underline">
+        {String(v)}
+      </Link>
+    );
+  }
   if (field.type === "number") return <span className="tabular">{String(v)}</span>;
-  return <span className={cn("block max-w-[10rem] truncate whitespace-nowrap xl:max-w-[16rem]", field.primary && "font-medium")} title={String(v)}>{String(v)}</span>;
+  return <span className={cn("block max-w-[8rem] truncate whitespace-nowrap xl:max-w-[16rem]", field.primary && "font-medium")} title={String(v)}>{String(v)}</span>;
 }
 
 export function RecordsPage() {
@@ -55,6 +63,7 @@ export function RecordsPage() {
   const [view, setView] = useState<"active" | "archived">("active");
   const [editing, setEditing] = useState<RecordItem | null>(null);
   const [creating, setCreating] = useState(false);
+  const seeMoney = useCanSeeMoney();
 
   const filterField = mod?.fields.find((f) => f.type === "select");
   const records = useMemo(() => {
@@ -63,8 +72,9 @@ export function RecordsPage() {
     return allRecords
       .filter((r) => r.moduleId === mod.id && (view === "archived" ? r.archived : !r.archived))
       .filter((r) => (filter === "all" || !filterField ? true : r.data[filterField.key] === filter))
-      .filter((r) => !q || Object.values(r.data).some((v) => String(v).toLowerCase().includes(q)));
-  }, [allRecords, mod, query, filter, filterField, view]);
+      // Restricted amounts aren't searchable, so a search can't reveal them.
+      .filter((r) => !q || mod.fields.some((f) => (seeMoney || !f.financial) && String(r.data[f.key] ?? "").toLowerCase().includes(q)));
+  }, [allRecords, mod, query, filter, filterField, view, seeMoney]);
 
   const access = moduleAccess(me, moduleId);
   if (!mod || !mod.active) return <Forbidden message="This module doesn't exist or has been deactivated by a Department Head." />;
@@ -83,7 +93,11 @@ export function RecordsPage() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {!r.archived && <DropdownMenuItem onSelect={() => setEditing(r)}><Pencil />Edit</DropdownMenuItem>}
-        <DropdownMenuItem onSelect={() => { setArchived(r.id, !r.archived); toast.success(r.archived ? "Record restored" : "Record archived"); }}>
+        <DropdownMenuItem onSelect={() => {
+          const res = setArchived(r.id, !r.archived);
+          if (res.ok) toast.success(r.archived ? "Record restored" : "Record archived");
+          else toast.error(res.errors?.[0] ?? "Couldn't change this record");
+        }}>
           {r.archived ? <><ArchiveRestore />Restore</> : <><Archive />Archive</>}
         </DropdownMenuItem>
         {external && isHead && !r.archived && (
@@ -109,6 +123,11 @@ export function RecordsPage() {
               <Button variant="outline" onClick={() => syncNow(mod.id)}><RefreshCw />Sync now</Button>
             )}
             {canEdit && <Button onClick={() => setCreating(true)}><Plus />Add {mod.recordName.toLowerCase()}</Button>}
+            {!canEdit && (
+              <Badge variant="secondary" className="h-9 gap-1.5 px-3.5 text-sm [&_svg]:size-4">
+                <Eye />{external ? "Orders move through role steps" : "View only"}
+              </Badge>
+            )}
           </>
         }
       />
@@ -165,7 +184,7 @@ export function RecordsPage() {
                     {mod.fields.map((f) => (
                       <TableHead key={f.key} className={hideCls(f)}>{f.label}</TableHead>
                     ))}
-                    {external && <TableHead>Sync</TableHead>}
+                    {external && <TableHead className="hidden xl:table-cell">Sync</TableHead>}
                     <TableHead className="hidden xl:table-cell">Updated</TableHead>
                     <TableHead className="w-10"><span className="sr-only">Actions</span></TableHead>
                   </TableRow>
@@ -176,7 +195,7 @@ export function RecordsPage() {
                       {mod.fields.map((f) => (
                         <TableCell key={f.key} className={hideCls(f)}><Cell field={f} rec={r} /></TableCell>
                       ))}
-                      {external && <TableCell><SyncBadge state={r.syncState} /></TableCell>}
+                      {external && <TableCell className="hidden xl:table-cell"><SyncBadge state={r.syncState} /></TableCell>}
                       <TableCell className="hidden whitespace-nowrap text-muted-foreground xl:table-cell">
                         <div className="text-sm">{timeAgo(r.updatedAt)}</div>
                         <div className="text-xs">{r.updatedBy}</div>
@@ -218,6 +237,7 @@ export function RecordsPage() {
         open={creating}
         onOpenChange={setCreating}
         module={mod}
+        hiddenFields={seeMoney ? [] : mod.fields.filter((f) => f.financial).map((f) => f.key)}
         title={`Add ${mod.recordName.toLowerCase()}`}
         description="Every entry is checked against this module's validation rules before it's saved."
         submitLabel={`Add ${mod.recordName.toLowerCase()}`}
@@ -231,6 +251,7 @@ export function RecordsPage() {
         open={!!editing}
         onOpenChange={(o) => !o && setEditing(null)}
         module={mod}
+        hiddenFields={seeMoney ? [] : mod.fields.filter((f) => f.financial).map((f) => f.key)}
         initial={editing?.data}
         title={`Edit ${mod.recordName.toLowerCase()}`}
         description={external ? `Saved in Zentra first, then written back to ${mod.source}.` : undefined}
