@@ -71,6 +71,31 @@ export function RecordsPage() {
   const canEdit = access === "edit";
   const isHead = can(me, "sync.manage");
   const external = mod.kind === "external";
+  // Phone cards lead with the primary field and show the rest of the always-visible columns beneath it.
+  const primaryField = mod.fields.find((f) => f.primary) ?? mod.fields[0];
+  const cardFields = mod.fields.filter((f) => f !== primaryField && !f.hideOnMobile && !f.hideOnTablet);
+
+  const actions = (r: RecordItem) => canEdit && (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" aria-label="Record actions"><MoreHorizontal /></Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {!r.archived && <DropdownMenuItem onSelect={() => setEditing(r)}><Pencil />Edit</DropdownMenuItem>}
+        <DropdownMenuItem onSelect={() => { setArchived(r.id, !r.archived); toast.success(r.archived ? "Record restored" : "Record archived"); }}>
+          {r.archived ? <><ArchiveRestore />Restore</> : <><Archive />Archive</>}
+        </DropdownMenuItem>
+        {external && isHead && !r.archived && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => { simulateRemoteEdit(r.id); toast("Changed in Bitrix24", { description: "Edit this order in Zentra now to trigger a conflict, or press Sync now to pull the change." }); }}>
+              <Zap />Simulate Bitrix24 edit
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 
   return (
     <>
@@ -131,55 +156,56 @@ export function RecordsPage() {
             description={query || filter !== "all" ? "Try a different search or filter." : canEdit && view === "active" ? `Add the first ${mod.recordName.toLowerCase()} or import a file through the data pipeline.` : undefined}
           />
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                {mod.fields.map((f) => (
-                  <TableHead key={f.key} className={hideCls(f)}>{f.label}</TableHead>
-                ))}
-                {external && <TableHead>Sync</TableHead>}
-                <TableHead className="hidden xl:table-cell">Updated</TableHead>
-                <TableHead className="w-10"><span className="sr-only">Actions</span></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {records.map((r) => (
-                <TableRow key={r.id}>
-                  {mod.fields.map((f) => (
-                    <TableCell key={f.key} className={hideCls(f)}><Cell field={f} rec={r} /></TableCell>
+          <>
+            <div className="hidden sm:block">
+              <Table>
+                <TableHeader>
+                  <TableRow className="hover:bg-transparent">
+                    {mod.fields.map((f) => (
+                      <TableHead key={f.key} className={hideCls(f)}>{f.label}</TableHead>
+                    ))}
+                    {external && <TableHead>Sync</TableHead>}
+                    <TableHead className="hidden xl:table-cell">Updated</TableHead>
+                    <TableHead className="w-10"><span className="sr-only">Actions</span></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {records.map((r) => (
+                    <TableRow key={r.id}>
+                      {mod.fields.map((f) => (
+                        <TableCell key={f.key} className={hideCls(f)}><Cell field={f} rec={r} /></TableCell>
+                      ))}
+                      {external && <TableCell><SyncBadge state={r.syncState} /></TableCell>}
+                      <TableCell className="hidden whitespace-nowrap text-muted-foreground xl:table-cell">
+                        <div className="text-sm">{timeAgo(r.updatedAt)}</div>
+                        <div className="text-xs">{r.updatedBy}</div>
+                      </TableCell>
+                      <TableCell>{actions(r)}</TableCell>
+                    </TableRow>
                   ))}
-                  {external && <TableCell><SyncBadge state={r.syncState} /></TableCell>}
-                  <TableCell className="hidden whitespace-nowrap text-muted-foreground xl:table-cell">
-                    <div className="text-sm">{timeAgo(r.updatedAt)}</div>
-                    <div className="text-xs">{r.updatedBy}</div>
-                  </TableCell>
-                  <TableCell>
-                    {canEdit && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" aria-label="Record actions"><MoreHorizontal /></Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {!r.archived && <DropdownMenuItem onSelect={() => setEditing(r)}><Pencil />Edit</DropdownMenuItem>}
-                          <DropdownMenuItem onSelect={() => { setArchived(r.id, !r.archived); toast.success(r.archived ? "Record restored" : "Record archived"); }}>
-                            {r.archived ? <><ArchiveRestore />Restore</> : <><Archive />Archive</>}
-                          </DropdownMenuItem>
-                          {external && isHead && !r.archived && (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onSelect={() => { simulateRemoteEdit(r.id); toast("Changed in Bitrix24", { description: "Edit this order in Zentra now to trigger a conflict, or press Sync now to pull the change." }); }}>
-                                <Zap />Simulate Bitrix24 edit
-                              </DropdownMenuItem>
-                            </>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
-                  </TableCell>
-                </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+            <ul className="divide-y sm:hidden">
+              {records.map((r) => (
+                <li key={r.id} className="flex items-start gap-2 py-3 pl-4 pr-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-sm"><Cell field={primaryField} rec={r} /></div>
+                    <dl className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
+                      {cardFields.map((f) => (
+                        <div key={f.key} className="flex min-w-0 items-center gap-1.5">
+                          <dt className="shrink-0 text-muted-foreground">{f.label}</dt>
+                          <dd className="min-w-0"><Cell field={f} rec={r} /></dd>
+                        </div>
+                      ))}
+                      {external && <div><dt className="sr-only">Sync</dt><dd><SyncBadge state={r.syncState} /></dd></div>}
+                    </dl>
+                  </div>
+                  {actions(r)}
+                </li>
               ))}
-            </TableBody>
-          </Table>
+            </ul>
+          </>
         )}
         <div className="border-t px-4 py-3 text-xs text-muted-foreground">
           {records.length} {mod.recordName.toLowerCase()}{records.length === 1 ? "" : "s"}
