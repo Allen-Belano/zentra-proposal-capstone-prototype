@@ -21,12 +21,13 @@ export function StatCard({
   label, value, hint, tone = "default", icon,
 }: { label: string; value: ReactNode; hint?: ReactNode; tone?: "default" | "warning" | "danger" | "success"; icon?: ReactNode }) {
   return (
-    <Card className="p-4 sm:p-5">
-      <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
-        <span>{label}</span>
+    <Card className="p-4 transition-shadow duration-300 ease-fluid hover:shadow-float sm:p-5">
+      <div className="flex items-start justify-between gap-2 text-sm text-muted-foreground">
+        <span className="pt-1.5">{label}</span>
         <span className={cn(
-          "[&_svg]:size-4",
-          tone === "warning" && "text-warning", tone === "danger" && "text-destructive", tone === "success" && "text-success",
+          "grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted [&_svg]:size-4",
+          tone === "warning" && "bg-warning/10 text-warning", tone === "danger" && "bg-destructive/10 text-destructive",
+          tone === "success" && "bg-success/10 text-success",
         )}>{icon}</span>
       </div>
       <div className="mt-2 text-2xl font-semibold tracking-tight tabular sm:text-3xl">{value}</div>
@@ -61,7 +62,7 @@ export function LevelDot({ level }: { level: EventLevel }) {
 export function EmptyState({ title, description, action }: { title: string; description?: string; action?: ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 px-6 py-12 text-center">
-      <CircleDashed className="h-6 w-6 text-muted-foreground" />
+      <span className="mb-1 grid h-11 w-11 place-items-center rounded-full bg-muted"><CircleDashed className="h-5 w-5 text-muted-foreground" /></span>
       <p className="font-medium">{title}</p>
       {description && <p className="max-w-sm text-sm text-muted-foreground">{description}</p>}
       {action && <div className="mt-2">{action}</div>}
