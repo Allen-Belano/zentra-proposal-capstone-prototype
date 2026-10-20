@@ -18,8 +18,9 @@ import type { ModuleField, RecordItem } from "@/lib/types";
 import { cn, formatDate, formatPeso, timeAgo } from "@/lib/utils";
 import { useApp, useMe } from "@/store/app-store";
 
+// With the sidebar open, a 1280px laptop leaves about as much room as a tablet, so tablet-hidden columns wait for 2xl.
 const hideCls = (f: ModuleField) =>
-  cn(f.hideOnTablet ? "hidden xl:table-cell" : f.hideOnMobile && "hidden md:table-cell");
+  cn(f.hideOnTablet ? "hidden 2xl:table-cell" : f.hideOnMobile && "hidden md:table-cell");
 
 function Cell({ field, rec }: { field: ModuleField; rec: RecordItem }) {
   const v = rec.data[field.key];
@@ -37,7 +38,7 @@ function Cell({ field, rec }: { field: ModuleField; rec: RecordItem }) {
   }
   if (field.key === "stage") return <Badge variant={v === "Delivered" ? "success" : "secondary"}>{String(v)}</Badge>;
   if (field.type === "number") return <span className="tabular">{String(v)}</span>;
-  return <span className={cn("block max-w-[16rem] truncate whitespace-nowrap", field.primary && "font-medium")} title={String(v)}>{String(v)}</span>;
+  return <span className={cn("block max-w-[10rem] truncate whitespace-nowrap xl:max-w-[16rem]", field.primary && "font-medium")} title={String(v)}>{String(v)}</span>;
 }
 
 export function RecordsPage() {
