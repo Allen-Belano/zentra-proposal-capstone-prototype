@@ -36,7 +36,7 @@ export function makeSeed() {
     {
       id: "ims", name: "Inventory", recordName: "Item", icon: "package",
       description: "Stock levels, reorder points, and storage locations.",
-      kind: "native", adapter: { type: "native", frequency: "realtime" }, active: true, baseline: true,
+      kind: "native", owner: "Operations · Inventory", adapter: { type: "native", frequency: "realtime" }, active: true, baseline: true,
       registeredAt: ago(60 * 24 * 30), registeredBy: "Carlo Reyes",
       fields: [
         { key: "sku", label: "SKU", type: "text" },
@@ -51,8 +51,15 @@ export function makeSeed() {
     {
       id: "operations", name: "Operations", recordName: "Order", icon: "truck",
       description: "Orders from won Bitrix24 deals, from credit check to payment.",
-      kind: "external", source: "Bitrix24",
-      adapter: { type: "api", endpoint: "https://ifixz.bitrix24.com/rest/crm.deal", frequency: "realtime" },
+      kind: "external", source: "Bitrix24", owner: "Operations",
+      adapter: {
+        type: "api", endpoint: "https://ifixz.bitrix24.com/rest/crm.deal", frequency: "realtime",
+        connection: { endpoint: "https://ifixz.bitrix24.com/rest/crm.deal", auth: "OAuth 2.0 client", pageSize: "50" },
+        mapping: {
+          order_no: "TITLE", customer: "COMPANY_TITLE", client_po: "UF_CRM_CLIENT_PO", items: "UF_CRM_ITEMS",
+          amount: "OPPORTUNITY", stage: "STAGE_ID", payment: "UF_CRM_PAYMENT", due_date: "CLOSEDATE",
+        },
+      },
       active: true, baseline: true, registeredAt: ago(60 * 24 * 30), registeredBy: "Carlo Reyes", lastSyncedAt: ago(8),
       fields: [
         { key: "order_no", label: "Order no.", type: "text", primary: true },
