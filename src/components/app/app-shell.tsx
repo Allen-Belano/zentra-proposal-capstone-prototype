@@ -188,18 +188,23 @@ export function AppShell() {
   return (
     <div className="flex h-full">
       <aside className={cn(
-        "safe-top sticky top-0 hidden h-dvh shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200 lg:flex",
-        collapsed ? "w-[68px]" : "w-64",
+        "safe-top sticky top-3 my-3 ml-3 hidden h-[calc(100dvh-1.5rem)] shrink-0 flex-col overflow-hidden rounded-3xl border border-sidebar-border bg-sidebar shadow-soft transition-[width] duration-300 ease-fluid lg:flex",
+        collapsed ? "w-[72px]" : "w-64",
       )}>
-        <div className={cn("flex h-14 items-center px-5", collapsed && "justify-center px-0")}>
+        <div className={cn("flex h-16 items-center px-6", collapsed && "justify-center px-0")}>
           {collapsed ? <ZentraMark /> : <ZentraLogo />}
         </div>
         <div className="flex-1 overflow-y-auto py-3">
           <NavList collapsed={collapsed} />
         </div>
-        <div className={cn("flex items-center gap-2 border-t border-sidebar-border px-5 py-3 text-xs text-muted-foreground", collapsed && "justify-center px-0")}>
-          <ShieldCheck className="h-4 w-4 shrink-0 text-primary" />
-          {!collapsed && <span className="truncate">{me.department} · {ROLE_LABEL[me.role]}</span>}
+        <div className={cn("m-3 flex items-center gap-2.5 rounded-2xl bg-muted px-3 py-2.5 text-xs text-muted-foreground", collapsed && "justify-center px-0")}>
+          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-card text-primary shadow-soft"><ShieldCheck className="h-3.5 w-3.5" /></span>
+          {!collapsed && (
+            <span className="min-w-0 leading-tight">
+              <span className="block truncate font-medium text-foreground">{ROLE_LABEL[me.role]}</span>
+              <span className="block truncate">{me.department}</span>
+            </span>
+          )}
         </div>
       </aside>
 
@@ -207,7 +212,7 @@ export function AppShell() {
         <SheetContent className="safe-top flex flex-col p-0">
           <SheetTitle className="sr-only">Navigation</SheetTitle>
           <SheetDescription className="sr-only">Main menu</SheetDescription>
-          <div className="flex h-14 items-center px-5"><ZentraLogo /></div>
+          <div className="flex h-16 items-center px-6"><ZentraLogo /></div>
           <div className="flex-1 overflow-y-auto py-3"><NavList onNavigate={() => setMobileOpen(false)} /></div>
         </SheetContent>
       </Sheet>
