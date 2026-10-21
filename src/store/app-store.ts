@@ -5,7 +5,7 @@ import { actionOwner, actionsFor, ORDER_ACTIONS, type OrderStage } from "@/lib/o
 import { can, canActAs, canViewFinancials, moduleAccess, POSITION_LABEL } from "@/lib/rbac";
 import { recordLabel, transformRow, validateRow } from "@/lib/validation";
 import type {
-  ActivityEvent, AppNotification, AuditEntry, Backup, BatchItemKind, BatchOutcome, BatchRun, EventLevel, ModuleAccess,
+  ActivityEvent, AppNotification, DashboardPrefs, AuditEntry, Backup, BatchItemKind, BatchOutcome, BatchRun, EventLevel, ModuleAccess,
   ModuleDef, OrderDocs, OrderLogEntry, PipelineRun, Position, RecordItem, RejectedRow, RemoteRecord, Role, SyncFrequency,
   SyncOperation, User, ValidationRule,
 } from "@/lib/types";
@@ -30,12 +30,17 @@ const ARRIVAL: Partial<Record<OrderStage, { to: AppNotification["to"]; title: (n
 
 interface AppState extends Omit<Seed, "backupSchedule"> {
   sessionUserId: string | null;
+  /** Overview layouts, per user. */
+  dashboards: Record<string, DashboardPrefs>;
+  setDashboard: (prefs: DashboardPrefs | null) => void;
   backupSchedule: BackupSchedule;
 
   login: (email: string, password: string) => { ok: boolean; error?: string };
   logout: () => void;
   resetDemo: () => void;
 
+  /** Validation errors a save would hit, without saving. */
+  checkRecord: (moduleId: string, data: Row, recordId?: string) => string[];
   addRecord: (moduleId: string, data: Row) => Result;
   updateRecord: (recordId: string, data: Row) => Result;
   setArchived: (recordId: string, archived: boolean) => Result;
@@ -65,6 +70,7 @@ interface AppState extends Omit<Seed, "backupSchedule"> {
   setModuleAccess: (userId: string, moduleId: string, access: ModuleAccess) => void;
   setUserPosition: (userId: string, position: Position) => Result;
   setFinancialAccess: (userId: string, on: boolean) => Result;
+  setTeamKpiAccess: (userId: string, on: boolean) => Result;
 
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
@@ -199,6 +205,18 @@ export const useApp = create<AppState>()(
       return {
         ...makeSeed(),
         sessionUserId: null,
+        dashboards: {},
+
+        setDashboard: (prefs) => {
+          const u = me();
+          if (!u || u.role !== "dept_head") return;
+          set((s) => {
+            const next = { ...s.dashboards };
+            if (prefs) next[u.id] = prefs; else delete next[u.id];
+            return { dashboards: next };
+          });
+          audit(prefs ? "Customized Overview" : "Reset Overview layout", prefs ? `${prefs.widgets.length} widgets` : "Default layout");
+        },
 
         login: (email, password) => {
           const u = get().users.find((x) => x.email.toLowerCase() === email.trim().toLowerCase());
@@ -212,7 +230,15 @@ export const useApp = create<AppState>()(
           audit("Signed out", "Session");
           set({ sessionUserId: null });
         },
-        resetDemo: () => set({ ...makeSeed(), sessionUserId: get().sessionUserId }),
+        resetDemo: () => set({ ...makeSeed(), sessionUserId: get().sessionUserId, dashboards: {} }),
+
+        checkRecord: (moduleId, data, recordId) => {
+          const m = mod(moduleId);
+          const rec = recordId ? get().records.find((r) => r.id === recordId) : undefined;
+          const merged = { ...data };
+          if (rec && !canViewFinancials(me())) for (const f of m.fields) if (f.financial) merged[f.key] = rec.data[f.key];
+          return validateRow(m, get().rules, merged, get().records, recordId);
+        },
 
         addRecord: (moduleId, data) => {
           const block = denied(moduleId);
@@ -550,6 +576,17 @@ export const useApp = create<AppState>()(
           if (!can(me(), "users.manage") || !target) return { ok: false, errors: ["Only the Super Admin can grant financial access."] };
           set((s) => ({ users: s.users.map((x) => (x.id === userId ? { ...x, financialAccess: on } : x)) }));
           audit(on ? "Granted financial data access" : "Revoked financial data access", target.name);
+          return { ok: true };
+        },
+
+        setTeamKpiAccess: (userId, on) => {
+          const u = me();
+          const target = get().users.find((x) => x.id === userId);
+          if (!can(u, "access.manage") || !target || target.role !== "employee" || target.department !== u?.department) {
+            return { ok: false, errors: ["Only the Department Head can grant team KPI access in their department."] };
+          }
+          set((s) => ({ users: s.users.map((x) => (x.id === userId ? { ...x, teamKpiAccess: on } : x)) }));
+          audit(on ? "Granted team KPI access" : "Revoked team KPI access", target.name);
           return { ok: true };
         },
 

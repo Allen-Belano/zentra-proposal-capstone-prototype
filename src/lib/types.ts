@@ -16,6 +16,8 @@ export interface User {
   position?: Position;
   /** Explicit grant from the Super Admin to see amounts, costs, and receivables. */
   financialAccess?: boolean;
+  /** Explicit grant from the Department Head to see colleagues' and department KPIs. */
+  teamKpiAccess?: boolean;
   /** Access to modules registered after the baseline, set by their Department Head. */
   moduleAccess: Record<string, ModuleAccess>;
 }
@@ -231,4 +233,12 @@ export interface BatchRun {
   at: string;
   by: string;
   outcomes: BatchOutcome[];
+}
+
+export type ChartKind = "bar" | "line" | "pie";
+
+/** A Department Head's Overview layout: which widgets show, in order, and each chart's type. */
+export interface DashboardPrefs {
+  widgets: string[];
+  charts: Record<string, ChartKind>;
 }
