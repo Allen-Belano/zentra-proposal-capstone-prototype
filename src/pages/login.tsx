@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowRightLeft, Boxes, Building2, ChevronRight, Loader2, Moon, Sun } from "lucide-react";
+import { ArrowRightLeft, Boxes, Building2, ChevronDown, ChevronRight, Loader2, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -217,6 +217,7 @@ export function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [showDemo, setShowDemo] = useState(false);
 
   const submit = (e?: React.FormEvent, override?: { email: string; password: string }) => {
     e?.preventDefault();
@@ -273,26 +274,47 @@ export function LoginPage() {
             <Button type="submit" disabled={busy}>{busy && <Loader2 className="animate-spin" />}Sign in</Button>
           </form>
 
-          <div className="mt-8">
-            <p className="text-sm font-medium">Demo accounts</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">Password for all accounts: <span className="font-medium text-foreground">{DEMO_PASSWORD}</span></p>
-            <div className="stagger mt-3 grid gap-2 sm:grid-cols-2">
-              {DEMO.map((d) => (
-                <button
-                  key={d.email}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => { setEmail(d.email); setPassword(DEMO_PASSWORD); submit(undefined, { email: d.email, password: DEMO_PASSWORD }); }}
-                  className={cn("flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card px-4 py-3 text-left shadow-soft transition-[border-color,box-shadow,transform] duration-200 ease-fluid hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-float active:translate-y-0 disabled:opacity-60 dark:border-border")}
-                >
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium">{d.title}</div>
-                    <div className="truncate text-xs text-muted-foreground">{d.name}</div>
-                    <div className="truncate text-xs text-muted-foreground">{d.scope}</div>
+          <div className="mt-8 rounded-2xl border border-border/60 bg-card/60 dark:border-border">
+            <button
+              type="button" onClick={() => setShowDemo((o) => !o)}
+              aria-expanded={showDemo} aria-controls="demo-accounts"
+              className="flex w-full items-center justify-between gap-3 rounded-2xl px-4 py-3 text-left transition-colors duration-200 hover:bg-muted/60"
+            >
+              <span>
+                <span className="block text-sm font-medium">Demo accounts</span>
+                <span className="block text-xs text-muted-foreground">{showDemo ? "Pick an account to sign in" : `${DEMO.length} accounts · one-click sign-in`}</span>
+              </span>
+              <ChevronDown className={cn("h-4 w-4 shrink-0 text-muted-foreground transition-transform duration-500 ease-fluid", showDemo && "rotate-180")} />
+            </button>
+            {/* Grid rows 0fr → 1fr animates to the content's natural height. */}
+            <div
+              id="demo-accounts"
+              className={cn("grid transition-[grid-template-rows,opacity] duration-500 ease-fluid", showDemo ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0")}
+            >
+              <div className="overflow-hidden" aria-hidden={!showDemo}>
+                <div className="px-3 pb-3">
+                  <p className="px-1 pb-2 text-xs text-muted-foreground">Password for all accounts: <span className="font-medium text-foreground">{DEMO_PASSWORD}</span></p>
+                  <div key={showDemo ? "open" : "closed"} className={cn("grid gap-2 sm:grid-cols-2", showDemo && "stagger")}>
+                    {DEMO.map((d) => (
+                      <button
+                        key={d.email}
+                        type="button"
+                        disabled={busy}
+                        tabIndex={showDemo ? 0 : -1}
+                        onClick={() => { setEmail(d.email); setPassword(DEMO_PASSWORD); submit(undefined, { email: d.email, password: DEMO_PASSWORD }); }}
+                        className={cn("flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-border/60 bg-card px-4 py-3 text-left shadow-soft transition-[border-color,box-shadow,transform] duration-200 ease-fluid hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-float active:translate-y-0 disabled:opacity-60 dark:border-border")}
+                      >
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium">{d.title}</div>
+                          <div className="truncate text-xs text-muted-foreground">{d.name}</div>
+                          <div className="truncate text-xs text-muted-foreground">{d.scope}</div>
+                        </div>
+                        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                      </button>
+                    ))}
                   </div>
-                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
-                </button>
-              ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
