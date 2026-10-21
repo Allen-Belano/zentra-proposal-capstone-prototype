@@ -82,16 +82,18 @@ export function LoginPage() {
     <div className="grid min-h-full lg:grid-cols-[1.05fr_1fr]">
       <section className="relative m-3 hidden overflow-hidden rounded-3xl bg-gradient-to-br from-[#16303f] via-[#122634] to-[#0b1822] p-12 text-white shadow-float duration-700 [&_rect.fill-primary]:fill-[hsl(192_50%_42%)] ease-fluid animate-in fade-in-0 slide-in-from-left-4 lg:flex lg:flex-col">
         <div className="flex items-center gap-2.5"><ZentraMark /><span className="text-[17px] font-semibold">Zentra</span></div>
-        <div className="mt-auto max-w-md">
-          <h1 className="text-3xl font-semibold leading-tight tracking-tight">
-            Inventory, orders, and every connected system in one validated workspace.
-          </h1>
-          <p className="mt-3 text-sm leading-relaxed text-slate-400">
-            Data from Bitrix24 and file imports passes through the validation pipeline before it reaches the central database.
-          </p>
+        <div className="mt-auto">
+          <div className="max-w-md">
+            <h1 className="text-3xl font-semibold leading-tight tracking-tight">
+              Inventory, orders, and every connected system in one validated workspace.
+            </h1>
+            <p className="mt-3 text-sm leading-relaxed text-slate-400">
+              Data from Bitrix24 and file imports passes through the validation pipeline before it reaches the central database.
+            </p>
+          </div>
           <SourcesDiagram />
         </div>
-        <p className="mt-auto pt-10 text-xs text-slate-500">iFixz Enterprise Co. · Capstone prototype by Aether</p>
+        <p className="mt-auto pt-10 text-xs text-slate-500">iFixz Workspace · Powered by Zentra</p>
       </section>
 
       <section className="safe-top flex min-w-0 items-center justify-center px-5 py-10 sm:px-10">
