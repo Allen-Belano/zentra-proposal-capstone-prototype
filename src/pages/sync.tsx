@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ArrowDownLeft, ArrowUpRight, CheckCircle2, CircleAlert, CloudOff, Layers, RefreshCw, RotateCw, XCircle } from "lucide-react";
 import { toast } from "sonner";
+import { confirmAction } from "@/components/app/confirm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,8 +55,14 @@ function ConflictCard({ op }: { op: SyncOperation }) {
           </table>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
-          <Button variant="outline" onClick={() => { resolveConflict(op.id, "external"); toast.success(`Kept the ${mod.source} version`); }}>Keep {mod.source} version</Button>
-          <Button onClick={() => { resolveConflict(op.id, "zentra"); toast.success("Kept the Zentra version", { description: `Pushed to ${mod.source}.` }); }}>Keep Zentra version</Button>
+          <Button variant="outline" onClick={async () => {
+            if (!(await confirmAction({ title: `Keep the ${mod.source} version of ${op.recordLabel}?`, description: `Zentra's edit is replaced with the version from ${mod.source}.`, confirmLabel: `Keep ${mod.source} version` }))) return;
+            resolveConflict(op.id, "external"); toast.success(`Kept the ${mod.source} version`);
+          }}>Keep {mod.source} version</Button>
+          <Button onClick={async () => {
+            if (!(await confirmAction({ title: `Keep the Zentra version of ${op.recordLabel}?`, description: `Zentra's version is pushed to ${mod.source}, replacing the change made there.`, confirmLabel: "Keep Zentra version" }))) return;
+            resolveConflict(op.id, "zentra"); toast.success("Kept the Zentra version", { description: `Pushed to ${mod.source}.` });
+          }}>Keep Zentra version</Button>
         </div>
       </CardContent>
     </Card>
@@ -73,7 +80,9 @@ function FailedCard({ op }: { op: SyncOperation }) {
           <div className="flex items-center gap-2 font-medium">{op.recordLabel}<Badge variant="destructive">Failed</Badge></div>
           <p className="text-sm text-muted-foreground">{op.error} The change is saved in Zentra. {timeAgo(op.createdAt)}.</p>
         </div>
-        <Button variant="outline" onClick={() => { retrySync(op.id); toast(outage ? "Retrying while Bitrix24 is unreachable" : "Retrying write-back"); }}>
+        <Button variant="outline" onClick={async () => {
+          if (!(await confirmAction({ title: `Retry the write-back for ${op.recordLabel}?`, description: "Zentra sends the saved change to Bitrix24 again.", confirmLabel: "Retry" }))) return;
+          retrySync(op.id); toast(outage ? "Retrying while Bitrix24 is unreachable" : "Retrying write-back"); }}>
           <RotateCw />Retry
         </Button>
       </CardContent>
@@ -148,7 +157,19 @@ function BatchPanel() {
   const chosen = items.filter((i) => selected.has(`${i.kind}:${i.id}`));
   const allOn = items.length > 0 && chosen.length === items.length;
   const toggle = (key: string) => setSelected((s) => { const n = new Set(s); if (n.has(key)) n.delete(key); else n.add(key); return n; });
-  const run = () => {
+  const run = async () => {
+    const count = (k: string) => chosen.filter((i) => i.kind === k).length;
+    const go = await confirmAction({
+      title: `Process ${chosen.length} record${chosen.length === 1 ? "" : "s"}?`,
+      description: "Each record is checked against permissions and validation rules. You'll get a summary when it's done.",
+      details: [
+        ...(count("writeback") ? [["Failed write-backs", `${count("writeback")} retried`] as [string, string]] : []),
+        ...(count("conflict") ? [["Sync conflicts", policy === "skip" ? `${count("conflict")} left for review` : `${count("conflict")} resolved (${policy === "zentra" ? "keep Zentra" : "keep Bitrix24"})`] as [string, string]] : []),
+        ...(count("rejected") ? [["Rejected rows", `${count("rejected")} re-validated`] as [string, string]] : []),
+      ],
+      confirmLabel: "Process",
+    });
+    if (!go) return;
     const result = batchProcess(chosen.map(({ kind, id }) => ({ kind, id })), policy);
     if (!result) return toast.error("Only Department Heads can run batch processing");
     setLast(result);
@@ -250,7 +271,11 @@ export function SyncPage() {
               <div className="text-sm font-medium">Simulate Bitrix24 outage</div>
               <div className="text-xs text-muted-foreground">Demo control. Write-backs retry 3 times, then fail.</div>
             </div>
-            <Switch checked={outage} onCheckedChange={(v) => { setOutage(v); toast(v ? "Bitrix24 is now unreachable" : "Bitrix24 connection restored"); }} aria-label="Simulate outage" />
+            <Switch checked={outage} onCheckedChange={async (v) => {
+              if (!(await confirmAction(v
+                ? { title: "Simulate a Bitrix24 outage?", description: "Demo control: Bitrix24 becomes unreachable. Write-backs retry 3 times, then fail.", confirmLabel: "Start outage", destructive: true }
+                : { title: "Restore the Bitrix24 connection?", description: "Demo control: Bitrix24 becomes reachable again.", confirmLabel: "Restore" }))) return;
+              setOutage(v); toast(v ? "Bitrix24 is now unreachable" : "Bitrix24 connection restored"); }} aria-label="Simulate outage" />
           </CardContent>
         </Card>
       </div>
