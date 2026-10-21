@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowRightLeft, Boxes, Building2, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -25,18 +25,120 @@ const DEMO: { email: string; title: string; name: string; scope: string }[] = [
   ...POSITIONS.map((p) => ({ email: STAFF[p].email, title: POSITION_LABEL[p], name: STAFF[p].name, scope: POSITION_SCOPE[p] })),
 ];
 
+const GLOW = "#5ee7ff";
+const CORE = "#e6fbff";
+
+/**
+ * Sources flowing into Zentra. Glowing beams run along all three lines; hovering a source
+ * lights its line, clicking it sends a burst that ripples the logo, and hovering the logo
+ * lights every line. Paths are measured from the real card and logo positions.
+ */
 function SourcesDiagram() {
   const sources = [
     { label: "Bitrix24", sub: "Won deals", icon: <ArrowRightLeft className="h-4 w-4" /> },
     { label: "Inventory files", sub: "CSV imports", icon: <Boxes className="h-4 w-4" /> },
     { label: "Transaction system", sub: "Planned", icon: <Building2 className="h-4 w-4" /> },
   ];
+  const wrap = useRef<HTMLDivElement>(null);
+  const cards = useRef<(HTMLDivElement | null)[]>([]);
+  const logo = useRef<HTMLDivElement>(null);
+  const filterId = `glow-${useId().replace(/:/g, "")}`;
+  const [geo, setGeo] = useState<{ w: number; h: number; paths: string[]; cx: number; cy: number } | null>(null);
+  const [hot, setHot] = useState<number[]>([]);
+  const [bursts, setBursts] = useState<{ id: number; i: number; delay: number }[]>([]);
+  const [ripples, setRipples] = useState<number[]>([]);
+  const timers = useRef<number[]>([]);
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+
+  useLayoutEffect(() => {
+    const el = wrap.current;
+    if (!el) return;
+    const measure = () => {
+      const box = el.getBoundingClientRect();
+      const l = logo.current!.getBoundingClientRect();
+      const ex = l.left - box.left - 2;
+      const ey = l.top - box.top + l.height / 2;
+      const paths = cards.current.map((c) => {
+        const r = c!.getBoundingClientRect();
+        const sx = r.right - box.left - 2;
+        const sy = r.top - box.top + r.height / 2;
+        const mx = (sx + ex) / 2;
+        return `M ${sx} ${sy} C ${mx} ${sy}, ${mx} ${ey}, ${ex} ${ey}`;
+      });
+      setGeo({ w: box.width, h: box.height, paths, cx: l.left - box.left + l.width / 2, cy: ey });
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const later = (fn: () => void, ms: number) => { timers.current.push(window.setTimeout(fn, ms)); };
+  const fire = (lines: number[]) => {
+    const now = Date.now();
+    const added = lines.flatMap((i) => [0, 1, 2, 3].map((k) => ({ id: now + i * 10 + k, i, delay: k * 90 })));
+    setBursts((b) => [...b, ...added]);
+    later(() => setRipples((r) => [...r, now]), 650);
+    later(() => setBursts((b) => b.filter((x) => !added.includes(x))), 1100);
+    later(() => setRipples((r) => r.filter((x) => x !== now)), 1500);
+  };
+  const isHot = (i: number) => hot.includes(i);
+
   return (
-    <div className="relative mt-10 grid grid-cols-[1fr_auto] items-center gap-8">
-      <div className="flex flex-col gap-3">
-        {sources.map((s) => (
-          <div key={s.label} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 backdrop-blur-sm">
-            <span className="text-sky-300">{s.icon}</span>
+    <div ref={wrap} className="relative mt-10 grid max-w-2xl grid-cols-[minmax(0,15rem)_minmax(5rem,1fr)_auto] items-center">
+      {geo && (
+        <svg className="pointer-events-none absolute inset-0 overflow-visible" width={geo.w} height={geo.h} viewBox={`0 0 ${geo.w} ${geo.h}`} aria-hidden>
+          <defs>
+            {/* User-space bounds, so the straight middle line (zero height) still gets its glow. */}
+            <filter id={filterId} filterUnits="userSpaceOnUse" x={-20} y={-20} width={geo.w + 40} height={geo.h + 40}>
+              <feGaussianBlur stdDeviation="2.6" result="blur" />
+              <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+            </filter>
+          </defs>
+          {geo.paths.map((d, i) => (
+            <g key={i} filter={`url(#${filterId})`}>
+              <path d={d} fill="none" stroke={GLOW} strokeWidth={isHot(i) ? 2.2 : 1.4} strokeOpacity={isHot(i) ? 0.9 : 0.35}
+                style={{ transition: "stroke-opacity .3s, stroke-width .3s" }} />
+              <path d={d} pathLength={100} fill="none" stroke={CORE} strokeWidth={3} strokeLinecap="round" strokeDasharray="26 100"
+                style={{ animation: `zentra-beam ${isHot(i) ? 0.8 : 2.2}s linear ${-(i * 0.73)}s infinite` }} />
+            </g>
+          ))}
+          <g filter={`url(#${filterId})`}>
+            {[0, 1.1].map((delay) => (
+              <circle key={delay} cx={geo.cx} cy={geo.cy} r={30} fill="none" stroke={GLOW} strokeWidth={1.5}
+                style={{ transformBox: "fill-box", transformOrigin: "center", animation: `zentra-ripple 2.2s ease-out ${delay}s infinite` }} />
+            ))}
+            {ripples.map((id) => (
+              <circle key={id} cx={geo.cx} cy={geo.cy} r={30} fill="none" stroke={CORE} strokeWidth={3}
+                style={{ transformBox: "fill-box", transformOrigin: "center", animation: "zentra-ripple .8s ease-out forwards" }} />
+            ))}
+          </g>
+        </svg>
+      )}
+      {geo && bursts.map((b) => (
+        <span key={b.id} aria-hidden className="pointer-events-none absolute left-0 top-0 h-2 w-2 rounded-full"
+          style={{
+            background: CORE, boxShadow: `0 0 10px 3px ${GLOW}`, offsetPath: `path("${geo.paths[b.i]}")`,
+            animation: `zentra-burst .7s ease-in ${b.delay}ms both`,
+          }} />
+      ))}
+      <div className="relative z-10 flex flex-col gap-3">
+        {sources.map((s, i) => (
+          <div
+            key={s.label}
+            ref={(el) => { cards.current[i] = el; }}
+            role="button" tabIndex={0}
+            aria-label={`Send a sample sync from ${s.label}`}
+            onMouseEnter={() => setHot([i])} onMouseLeave={() => setHot([])}
+            onFocus={() => setHot([i])} onBlur={() => setHot([])}
+            onClick={() => fire([i])}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fire([i]); } }}
+            className={cn(
+              "flex cursor-pointer select-none items-center gap-3 rounded-2xl border px-4 py-3 backdrop-blur-sm transition-[background-color,border-color,box-shadow,transform] duration-300 ease-fluid active:scale-[0.98]",
+              isHot(i) ? "border-cyan-300/50 bg-white/[0.09] shadow-[0_0_24px_-4px_rgba(94,231,255,0.45)]" : "border-white/10 bg-white/[0.05]",
+            )}
+          >
+            <span className={cn("transition-colors duration-300", isHot(i) ? "text-cyan-200" : "text-sky-300")}>{s.icon}</span>
             <div>
               <div className="text-sm font-medium text-white">{s.label}</div>
               <div className="text-xs text-slate-400">{s.sub}</div>
@@ -44,15 +146,24 @@ function SourcesDiagram() {
           </div>
         ))}
       </div>
-      <div className="flex flex-col items-center gap-2">
-        <ZentraMark className="h-14 w-14" />
+      <div aria-hidden />
+      <div className="relative z-10 flex flex-col items-center gap-2">
+        <div
+          ref={logo}
+          role="button" tabIndex={0} aria-label="Send a sample sync from every source"
+          onMouseEnter={() => setHot([0, 1, 2])} onMouseLeave={() => setHot([])}
+          onFocus={() => setHot([0, 1, 2])} onBlur={() => setHot([])}
+          onClick={() => fire([0, 1, 2])}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fire([0, 1, 2]); } }}
+          className={cn(
+            "cursor-pointer rounded-[14px] transition-[transform,box-shadow] duration-300 ease-fluid hover:scale-105 active:scale-95",
+            hot.length === 3 ? "shadow-[0_0_36px_4px_rgba(94,231,255,0.55)]" : "shadow-[0_0_24px_0_rgba(94,231,255,0.3)]",
+          )}
+        >
+          <ZentraMark className="h-14 w-14" />
+        </div>
         <span className="text-xs text-slate-400">One workspace</span>
       </div>
-      <svg className="pointer-events-none absolute inset-0 h-full w-full" preserveAspectRatio="none" viewBox="0 0 100 100" aria-hidden>
-        {[17, 50, 83].map((y) => (
-          <path key={y} d={`M 64 ${y} C 74 ${y}, 74 50, 82 50`} stroke="rgb(4 159 217 / 0.55)" strokeWidth="0.5" fill="none" strokeDasharray="1.5 1.5" vectorEffect="non-scaling-stroke" />
-        ))}
-      </svg>
     </div>
   );
 }
