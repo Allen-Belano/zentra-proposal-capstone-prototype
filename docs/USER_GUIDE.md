@@ -106,8 +106,8 @@ An order starts when a deal is won in Bitrix24. It then moves through these step
 When you sign in, your **Overview** shows:
 
 - **Waiting on you**: orders at a step your role completes. Start here each day.
-- **Daily process summary**: what was done today, split into paid and unpaid orders. Pick another date to look back.
-- **Monthly metrics**: shared numbers for the month, such as orders received and completed, on-time deliveries, and average time to complete.
+- **Daily process summary** (Accounting only): what was done today, split into paid and unpaid orders. Pick another date to look back.
+- **My KPIs**: your own performance this month. **Performance** in the sidebar shows the detail. Only you and your Department Head can see your KPIs, unless the Department Head gives someone team KPI access.
 
 To work on an order:
 
@@ -132,7 +132,7 @@ If it isn't your step, you'll see *Only [role] can move this order forward.* You
 
 Your **Overview** has three tabs:
 
-- **General**: business status, the daily process summary, open orders by step, and monthly metrics.
+- **General**: business status, the daily process summary, open orders by step, and monthly metrics (only Department Heads see monthly metrics). Click **Customize** to choose which KPI cards and panels appear, reorder them, and switch charts between **bar**, **line**, and **pie**. **Reset to default** restores the original layout.
 - **Needs attention**: what needs a decision. It covers pending tasks by role, delayed orders, unpaid transactions, sync and batch issues, and low stock. Each section shows a green "all clear" message when nothing is wrong.
 - **Technical**: pipeline success, sync issues, rejected rows, Bitrix24 status, pipeline throughput, system activity, and module health.
 
@@ -173,7 +173,23 @@ Your other tools:
 
 **Inventory → Add item**, or use the **⋯** menu on a row → **Edit** or **Archive**. Every entry is checked against the validation rules. For example, a SKU must look like `ABC-1234` and stock can't be negative.
 
-### Check a day's work
+### Confirm changes
+
+Every action that changes data or settings asks for confirmation first, describing what will happen. Nothing is saved until you click the confirm button. **Cancel** leaves everything as it was.
+
+### Check KPIs
+
+**Performance** shows each person's KPIs for the month you pick:
+
+- steps completed
+- average handling time (from when an order reached the step to when it was done)
+- the share of steps finished within the role's target time
+- orders waiting now
+- one measure specific to the role
+
+Employees see only their own KPIs. The Department Head sees every employee's KPIs plus the department totals. In **Team access**, the Department Head can turn on **Team KPIs** for an employee who needs to see them.
+
+### Check a day's work (Accounting, Department Head)
 
 On the **Overview**, use the date box in **Daily process summary**. It lists each order handled that day under **Paid** or **Unpaid**, with how many steps each role completed.
 
