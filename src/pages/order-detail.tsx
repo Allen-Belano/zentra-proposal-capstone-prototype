@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
 import { ArrowLeft, Check, CircleDot, Clock, FileText, Hourglass } from "lucide-react";
 import { toast } from "sonner";
+import { confirmAction } from "@/components/app/confirm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +26,17 @@ const DOC_ROWS: { key: keyof OrderDocs; label: string }[] = [
   { key: "dr", label: "Delivery receipt (DR)" },
   { key: "payment", label: "Official receipt (OR)" },
 ];
+
+/** What confirming an order action does: where the order goes and who hears about it. */
+function outcome(rec: RecordItem, a: OrderAction) {
+  const paid = a.markPaid ? "Paid" : rec.data.payment;
+  const next = a.next?.({ ...rec, data: { ...rec.data, payment: paid } });
+  const owner = next ? STAGE_INFO[next]?.owner : undefined;
+  const moves = next && next !== rec.data.stage
+    ? `The order moves to ${next}${owner ? ` and ${POSITION_LABEL[owner]} is notified` : ""}.`
+    : "The order stays at this step.";
+  return `${moves}${a.markPaid ? " Payment is marked Paid." : ""} The change is sent to Bitrix24.`;
+}
 
 export const whoLabel = (e: OrderLogEntry) =>
   e.position ? POSITION_LABEL[e.position] : e.role === "system" ? e.by : ROLE_LABEL[e.role];
@@ -84,8 +96,8 @@ function ActionDialog({ rec, action, onClose }: { rec: RecordItem; action: Order
     <Dialog open={!!action} onOpenChange={(o) => { if (!o) close(); }}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{action?.label}</DialogTitle>
-          <DialogDescription>{rec.data.order_no} · {action?.hint}</DialogDescription>
+          <DialogTitle>{action?.label}?</DialogTitle>
+          <DialogDescription>{action ? `${rec.data.order_no} · ${action.hint} ${outcome(rec, action)}` : ""}</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="grid gap-4">
           {errors.length > 0 && (
@@ -137,8 +149,9 @@ function NextStep({ rec }: { rec: RecordItem }) {
   const assignees = users.filter((u) => u.role === "employee" && u.status === "active" && u.position === owner).map((u) => u.name);
   const actions = actionsFor(rec);
   const mine = actions.filter((a) => canActAs(me, actionOwner(rec, a)));
-  const run = (a: OrderAction) => {
+  const run = async (a: OrderAction) => {
     if (a.docs?.length) return setPending(a);
+    if (!(await confirmAction({ title: `${a.label}?`, description: `${rec.data.order_no} · ${a.hint} ${outcome(rec, a)}`, confirmLabel: a.label }))) return;
     const r = advanceOrder(rec.id, a.id, {});
     if (r.ok) toast.success(a.label, { description: `${rec.data.order_no} updated and sent to Bitrix24.` });
     else toast.error(r.errors?.[0] ?? "Couldn't update this order");
