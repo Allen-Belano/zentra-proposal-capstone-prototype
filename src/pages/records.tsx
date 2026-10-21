@@ -12,10 +12,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useSyncNowToast } from "@/components/app/app-shell";
 import { EmptyState, Money, PageHeader, PaymentBadge, StageBadge, SyncBadge, useCanSeeMoney } from "@/components/app/bits";
 import { Forbidden } from "@/components/app/guard";
+import { confirmAction } from "@/components/app/confirm";
 import { RecordForm } from "@/components/app/record-form";
 import { can, moduleAccess } from "@/lib/rbac";
 import type { ModuleField, RecordItem } from "@/lib/types";
 import { cn, formatDate, timeAgo } from "@/lib/utils";
+import { recordLabel } from "@/lib/validation";
 import { useApp, useMe } from "@/store/app-store";
 
 // With the sidebar open, a 1280px laptop leaves about as much room as a tablet, so tablet-hidden columns wait for 2xl.
@@ -55,7 +57,7 @@ export function RecordsPage() {
   const mod = useApp((s) => s.modules.find((m) => m.id === moduleId));
   const allRecords = useApp((s) => s.records);
   const outage = useApp((s) => s.outage);
-  const { addRecord, updateRecord, setArchived, simulateRemoteEdit } = useApp.getState();
+  const { addRecord, updateRecord, setArchived, simulateRemoteEdit, checkRecord } = useApp.getState();
   const syncNow = useSyncNowToast();
 
   const [query, setQuery] = useState("");
@@ -93,7 +95,11 @@ export function RecordsPage() {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {!r.archived && <DropdownMenuItem onSelect={() => setEditing(r)}><Pencil />Edit</DropdownMenuItem>}
-        <DropdownMenuItem onSelect={() => {
+        <DropdownMenuItem onSelect={async () => {
+          const ok = await confirmAction(r.archived
+            ? { title: `Restore ${recordLabel(mod, r.data)}?`, description: `It returns to the active ${mod.name} list.`, confirmLabel: "Restore" }
+            : { title: `Archive ${recordLabel(mod, r.data)}?`, description: `It's hidden from the active ${mod.name} list. You can restore it from Archived at any time.`, confirmLabel: "Archive", destructive: true });
+          if (!ok) return;
           const res = setArchived(r.id, !r.archived);
           if (res.ok) toast.success(r.archived ? "Record restored" : "Record archived");
           else toast.error(res.errors?.[0] ?? "Couldn't change this record");
@@ -103,7 +109,9 @@ export function RecordsPage() {
         {external && isHead && !r.archived && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onSelect={() => { simulateRemoteEdit(r.id); toast("Changed in Bitrix24", { description: "Edit this order in Zentra now to trigger a conflict, or press Sync now to pull the change." }); }}>
+            <DropdownMenuItem onSelect={async () => {
+              if (!(await confirmAction({ title: "Simulate a Bitrix24 edit?", description: `Demo control: the copy of ${recordLabel(mod, r.data)} in Bitrix24 changes (due date moves 2 days).`, confirmLabel: "Simulate edit" }))) return;
+              simulateRemoteEdit(r.id); toast("Changed in Bitrix24", { description: "Edit this order in Zentra now to trigger a conflict, or press Sync now to pull the change." }); }}>
               <Zap />Simulate Bitrix24 edit
             </DropdownMenuItem>
           </>
@@ -241,7 +249,16 @@ export function RecordsPage() {
         title={`Add ${mod.recordName.toLowerCase()}`}
         description="Every entry is checked against this module's validation rules before it's saved."
         submitLabel={`Add ${mod.recordName.toLowerCase()}`}
-        onSubmit={(data) => {
+        onSubmit={async (data) => {
+          const errors = checkRecord(mod.id, data);
+          if (errors.length) return { ok: false, errors };
+          const ok = await confirmAction({
+            title: `Add this ${mod.recordName.toLowerCase()}?`,
+            description: external ? `It's saved in Zentra, then written back to ${mod.source}.` : `It's saved to ${mod.name}.`,
+            details: [[mod.fields.find((f) => f.primary)?.label ?? "Record", String(data[(mod.fields.find((f) => f.primary) ?? mod.fields[0]).key] ?? "")]],
+            confirmLabel: `Add ${mod.recordName.toLowerCase()}`,
+          });
+          if (!ok) return null;
           const r = addRecord(mod.id, data);
           if (r.ok) { setCreating(false); toast.success(`${mod.recordName} added`, { description: external ? `Writing back to ${mod.source}…` : undefined }); }
           return r;
@@ -256,7 +273,17 @@ export function RecordsPage() {
         title={`Edit ${mod.recordName.toLowerCase()}`}
         description={external ? `Saved in Zentra first, then written back to ${mod.source}.` : undefined}
         submitLabel="Save changes"
-        onSubmit={(data) => {
+        onSubmit={async (data) => {
+          const errors = checkRecord(mod.id, data, editing!.id);
+          if (errors.length) return { ok: false, errors };
+          const changed = mod.fields.filter((f) => data[f.key] !== undefined && String(data[f.key]) !== String(editing!.data[f.key] ?? ""));
+          const ok = await confirmAction({
+            title: `Save changes to ${recordLabel(mod, editing!.data)}?`,
+            description: changed.length ? (external ? `The changes are saved in Zentra, then written back to ${mod.source}.` : "The changes are saved.") : "Nothing was changed. Saving keeps it as is.",
+            details: changed.slice(0, 5).map((f) => [f.label, `${editing!.data[f.key] ?? "—"} → ${data[f.key] || "—"}`] as [string, string]),
+            confirmLabel: "Save changes",
+          });
+          if (!ok) return null;
           const r = updateRecord(editing!.id, data);
           if (r.ok) { setEditing(null); toast.success("Changes saved", { description: external ? `Writing back to ${mod.source}…` : undefined }); }
           return r;
