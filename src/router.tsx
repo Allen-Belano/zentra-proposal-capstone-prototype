@@ -5,6 +5,7 @@ import { Toaster } from "sonner";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppShell } from "@/components/app/app-shell";
+import { ConfirmHost } from "@/components/app/confirm";
 import { Guard } from "@/components/app/guard";
 import { ActivityPage } from "@/pages/activity";
 import { AuditPage } from "@/pages/audit";
@@ -39,6 +40,7 @@ const rootRoute = createRootRoute({
     <TooltipProvider delayDuration={200}>
       <Outlet />
       <Toaster position="bottom-right" richColors closeButton theme="system" />
+      <ConfirmHost />
     </TooltipProvider>
   ),
   notFoundComponent: NotFound,
