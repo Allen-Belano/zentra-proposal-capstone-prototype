@@ -546,14 +546,13 @@ export function OverviewPage() {
   const rejected = useApp((s) => s.rejected);
   const outage = useApp((s) => s.outage);
   const attention = useAttention();
-  const hour = Number(new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", hour: "numeric", hour12: false }).format(new Date()));
-  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  const first = me.name.split(" ")[0];
+  // Headings name the role, not the person: the same screen reads the same for whoever holds it.
+  const role = titleOf(me);
 
   if (me.role === "super_admin") {
     return (
       <>
-        <PageHeader title={`${greeting}, ${first}`} description="Account status and recent activity across Zentra." />
+        <PageHeader title={role} description="Account status and recent activity across Zentra." />
         <AdminOverview />
       </>
     );
@@ -567,7 +566,7 @@ export function OverviewPage() {
     const mine = active.filter((o) => STAGE_INFO[o.data.stage as OrderStage]?.owner === me.position);
     return (
       <>
-        <PageHeader title={`${greeting}, ${first}`} description={`${titleOf(me)} · your tasks and today's numbers`} />
+        <PageHeader title={role} description="Your tasks and today's numbers" />
         <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           <StatCard label="Waiting on you" value={mine.length} icon={<Hourglass />} tone={mine.length ? "warning" : "success"} hint="Orders at your step" />
           <StatCard label="Orders in progress" value={active.length} icon={<Truck />} hint="Across all roles" />
@@ -592,7 +591,7 @@ export function OverviewPage() {
 
   return (
     <>
-      <PageHeader title={`${greeting}, ${first}`} description="Business performance, operations, and what needs your decision." />
+      <PageHeader title={role} description="Business performance, operations, and what needs your decision." />
       <Tabs defaultValue="general">
         <TabsList className="mb-0">
           <TabsTrigger value="general">General</TabsTrigger>
