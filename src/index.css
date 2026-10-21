@@ -93,6 +93,21 @@
   .stagger > *:nth-child(n + 7) { animation-delay: 300ms; }
 }
 
+/* Sign-in diagram: beams travel the lines, ripples leave the logo, bursts ride a path. */
+@keyframes zentra-beam {
+  from { stroke-dashoffset: 26; }
+  to { stroke-dashoffset: -100; }
+}
+@keyframes zentra-ripple {
+  from { transform: scale(1); opacity: 0.8; }
+  to { transform: scale(2); opacity: 0; }
+}
+@keyframes zentra-burst {
+  from { offset-distance: 0%; opacity: 1; }
+  80% { opacity: 1; }
+  to { offset-distance: 100%; opacity: 0; }
+}
+
 @keyframes rise {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: none; }
