@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { DatabaseBackup, Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
+import { confirmAction } from "@/components/app/confirm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -21,10 +22,12 @@ export function BackupsPage() {
   const verified = backups.filter((b) => b.status === "verified").length;
 
   const backup = async () => {
+    if (!(await confirmAction({ title: "Create a backup now?", description: "Zentra takes a manual restore point of the central database. It's added to the list below.", confirmLabel: "Back up now" }))) return;
     setBusy("new"); await sleep(1200); createBackup(); setBusy(null);
     toast.success("Backup created", { description: "A new restore point is available." });
   };
   const test = async (id: string) => {
+    if (!(await confirmAction({ title: "Test this restore point?", description: "Zentra restores the backup into a test copy and checks its record counts. Live data isn't changed.", confirmLabel: "Run test" }))) return;
     setBusy(id); await sleep(1500); testRestore(id); setBusy(null);
     toast.success("Restore test passed", { description: "The restore point opened and its record counts matched." });
   };
@@ -42,7 +45,10 @@ export function BackupsPage() {
         <Card>
           <CardContent className="flex h-full flex-col justify-between gap-3 p-5">
             <span className="text-sm text-muted-foreground">Automatic schedule</span>
-            <Select value={schedule} onValueChange={(v) => { setBackupSchedule(v as BackupSchedule); toast.success("Schedule updated"); }}>
+            <Select value={schedule} onValueChange={async (v) => {
+              if (!(await confirmAction({ title: "Change the backup schedule?", description: "Automatic restore points will follow the new schedule.", details: [["From", SCHEDULE_LABEL[schedule]], ["To", SCHEDULE_LABEL[v as BackupSchedule]]], confirmLabel: "Change schedule" }))) return;
+              setBackupSchedule(v as BackupSchedule); toast.success("Schedule updated");
+            }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{(Object.keys(SCHEDULE_LABEL) as BackupSchedule[]).map((k) => <SelectItem key={k} value={k}>{SCHEDULE_LABEL[k]}</SelectItem>)}</SelectContent>
             </Select>
