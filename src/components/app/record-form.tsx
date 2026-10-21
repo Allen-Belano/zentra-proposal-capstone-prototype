@@ -19,7 +19,8 @@ export function RecordForm({
   title: string;
   description?: string;
   submitLabel: string;
-  onSubmit: (data: Row) => { ok: boolean; errors?: string[] };
+  /** Return null when the user cancels the confirmation; the form stays open. */
+  onSubmit: (data: Row) => { ok: boolean; errors?: string[] } | null | Promise<{ ok: boolean; errors?: string[] } | null>;
   initialErrors?: string[];
   /** Fields the user isn't allowed to see; they keep their stored values. */
   hiddenFields?: string[];
@@ -34,10 +35,10 @@ export function RecordForm({
     }
   }, [open, module, initial, initialErrors]);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const r = onSubmit(values);
-    if (!r.ok) setErrors(r.errors ?? ["Validation failed."]);
+    const r = await onSubmit(values);
+    if (r && !r.ok) setErrors(r.errors ?? ["Validation failed."]);
   };
 
   return (
