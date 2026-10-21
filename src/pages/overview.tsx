@@ -11,11 +11,13 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LevelDot, Money, PageHeader, StageBadge, StatCard } from "@/components/app/bits";
-import { delayReason, ORDER_STAGES, STAGE_INFO, type OrderStage } from "@/lib/orders";
-import { ROLE_LABEL, can, moduleAccess, POSITION_LABEL, POSITIONS, titleOf } from "@/lib/rbac";
+import { delayReason, STAGE_INFO, type OrderStage } from "@/lib/orders";
+import { ROLE_LABEL, can, canViewDailySummary, canViewMonthlyMetrics, moduleAccess, POSITION_LABEL, POSITIONS, titleOf } from "@/lib/rbac";
 import type { RecordItem } from "@/lib/types";
 import { cn, formatDateTime, timeAgo } from "@/lib/utils";
 import { useApp, useMe } from "@/store/app-store";
+import { CustomizableGeneral } from "@/components/app/dashboard";
+import { KpiCard, useKpiData } from "./performance";
 
 const PHT_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" });
 const PHT_LABEL = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric" });
@@ -50,6 +52,11 @@ const open = (o: RecordItem) => o.data.stage !== "Done";
 // Daily process summary
 
 export function DailySummary({ className }: { className?: string }) {
+  if (!canViewDailySummary(useMe())) return null;
+  return <DailySummaryCard className={className} />;
+}
+
+function DailySummaryCard({ className }: { className?: string }) {
   const orders = useOrders();
   const today = dayKey(new Date());
   const [day, setDay] = useState(today);
@@ -140,6 +147,11 @@ function monthStats(orders: RecordItem[], m: string) {
 }
 
 export function MonthlyMetrics({ className }: { className?: string }) {
+  if (!canViewMonthlyMetrics(useMe())) return null;
+  return <MonthlyMetricsCard className={className} />;
+}
+
+function MonthlyMetricsCard({ className }: { className?: string }) {
   const orders = useOrders();
   const lowStock = useLowStock();
   const months = useMemo(() => {
@@ -198,37 +210,6 @@ export function MonthlyMetrics({ className }: { className?: string }) {
 
 // ---------------------------------------------------------------------------------------
 // Business overview pieces
-
-function OrdersByStep({ className }: { className?: string }) {
-  const orders = useOrders();
-  const steps = ORDER_STAGES.filter((s) => s !== "Done").map((stage) => ({ stage, count: orders.filter((o) => o.data.stage === stage).length }));
-  const max = Math.max(1, ...steps.map((s) => s.count));
-  return (
-    <Card className={className}>
-      <CardHeader>
-        <CardTitle>Open orders by step</CardTitle>
-        <CardDescription>Where each active order is waiting, and on whom</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        {steps.map((s) => {
-          const owner = STAGE_INFO[s.stage].owner;
-          return (
-            <div key={s.stage} className="grid grid-cols-[7.5rem_1fr_1.5rem] items-center gap-3 text-sm">
-              <span className="min-w-0 leading-tight">
-                <span className="block truncate">{s.stage}</span>
-                <span className="block truncate text-xs text-muted-foreground">{owner ? POSITION_LABEL[owner] : ""}</span>
-              </span>
-              <div className="h-2 rounded-full bg-muted">
-                <div className={cn("h-2 rounded-full transition-[width] duration-700 ease-fluid", s.stage === "On hold" ? "bg-destructive" : "bg-primary")} style={{ width: `${(s.count / max) * 100}%` }} />
-              </div>
-              <span className="text-right tabular">{s.count}</span>
-            </div>
-          );
-        })}
-      </CardContent>
-    </Card>
-  );
-}
 
 function OrderRow({ o, extra, warning }: { o: RecordItem; extra?: React.ReactNode; warning?: string | null }) {
   const owner = STAGE_INFO[o.data.stage as OrderStage]?.owner;
@@ -357,6 +338,22 @@ function NeedsAttention() {
           ))}
         </AttentionCard>
       </div>
+    </div>
+  );
+}
+
+function MyKpis({ className }: { className?: string }) {
+  const me = useMe()!;
+  const { employees, prevName } = useKpiData(monthKey(new Date()));
+  const mine = employees.find((k) => k.user.id === me.id);
+  if (!mine) return null;
+  return (
+    <div className={cn("grid gap-2", className)}>
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-medium text-muted-foreground">My KPIs this month</h2>
+        <Link to="/performance" className="text-sm text-primary hover:underline">Details</Link>
+      </div>
+      <KpiCard k={mine} prevName={prevName} />
     </div>
   );
 }
@@ -578,9 +575,9 @@ export function OverviewPage() {
           <StatCard label="Low-stock items" value={lowStock.length} icon={<PackageX />} tone={lowStock.length ? "warning" : "default"} hint="At or below reorder level" />
         </div>
         <div className="stagger mt-4 grid gap-4 lg:grid-cols-3">
-          <WaitingOnYou className="lg:col-span-1" />
-          <DailySummary className="lg:col-span-2" />
-          <MonthlyMetrics className="lg:col-span-3" />
+          <WaitingOnYou className={canViewDailySummary(me) ? "lg:col-span-1" : "lg:col-span-3"} />
+          {canViewDailySummary(me) && <DailySummary className="lg:col-span-2" />}
+          <MyKpis className="lg:col-span-3" />
         </div>
       </>
     );
@@ -592,7 +589,6 @@ export function OverviewPage() {
   const loaded = recentRuns.reduce((a, r) => a + r.loaded, 0);
   const issues = syncOps.filter((o) => o.status === "conflict" || o.status === "failed").length;
   const openRejected = rejected.filter((r) => r.status === "open").length;
-  const unpaidDelivered = orders.filter((o) => o.data.stage === "Collection");
 
   return (
     <>
@@ -607,18 +603,11 @@ export function OverviewPage() {
           <TabsTrigger value="technical">Technical</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="general" className="grid gap-4">
-          <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-            <StatCard label="Orders in progress" value={active.length} icon={<Truck />} hint={`${active.length - attention.delayed.length} on track`} />
-            <StatCard label="Completed this month" value={completedThisMonth} icon={<UserCheck />} tone="success" hint="Delivered and paid" />
-            <StatCard label="Awaiting payment" value={unpaidDelivered.length} icon={<Wallet />} tone={unpaidDelivered.length ? "warning" : "default"} hint={<><Money value={unpaidDelivered.reduce((a, o) => a + Number(o.data.amount), 0)} /> receivable</>} />
-            <StatCard label="Delayed orders" value={attention.delayed.length} icon={<Clock />} tone={attention.delayed.length ? "warning" : "success"} hint="See Needs attention" />
-          </div>
-          <div className="stagger grid gap-4 lg:grid-cols-3">
-            <DailySummary className="lg:col-span-2" />
-            <OrdersByStep />
-            <MonthlyMetrics className="lg:col-span-3" />
-          </div>
+        <TabsContent value="general">
+          <CustomizableGeneral renderers={{
+            "daily-summary": (cls) => <DailySummary className={cls} />,
+            "monthly-metrics": (cls) => <MonthlyMetrics className={cls} />,
+          }} />
         </TabsContent>
 
         <TabsContent value="attention"><NeedsAttention /></TabsContent>
