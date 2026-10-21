@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
-  Activity, Bell, ChevronRight, DatabaseBackup, GitMerge, LayoutDashboard, LogOut, Menu, Monitor, Moon, PanelLeft,
+  Activity, Bell, Gauge, ChevronRight, DatabaseBackup, GitMerge, LayoutDashboard, LogOut, Menu, Monitor, Moon, PanelLeft,
   Puzzle, RefreshCw, RotateCcw, ScrollText, ShieldCheck, Sun, Users, Workflow,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -41,6 +41,7 @@ function useNav() {
       title: "Monitoring",
       items: [
         ...(p("activity.view") ? [{ to: "/activity", label: "Order tracking", icon: <Activity /> }] : []),
+        ...(me?.role === "dept_head" || me?.role === "employee" ? [{ to: "/performance", label: "Performance", icon: <Gauge /> }] : []),
         ...(p("pipeline.manage") ? [{ to: "/pipeline", label: "Data pipeline", icon: <Workflow />, count: openRejected }] : []),
         ...(p("sync.manage") ? [{ to: "/sync", label: "Sync center", icon: <GitMerge />, count: issues }] : []),
       ],
