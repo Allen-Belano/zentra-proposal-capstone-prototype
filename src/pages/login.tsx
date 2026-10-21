@@ -1,10 +1,11 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowRightLeft, Boxes, Building2, ChevronRight, Loader2 } from "lucide-react";
+import { ArrowRightLeft, Boxes, Building2, ChevronRight, Loader2, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ZentraLogo, ZentraMark } from "@/components/app/zentra-logo";
+import { ZentraMark } from "@/components/app/zentra-logo";
+import ifixzLogo from "@/assets/ifixz-logo.png";
 import { DEMO_PASSWORD, STAFF } from "@/data/seed";
 import { POSITION_LABEL, POSITIONS } from "@/lib/rbac";
 import type { Position } from "@/lib/types";
@@ -16,6 +17,7 @@ const POSITION_SCOPE: Record<Position, string> = {
   invoicing: "Sales invoices and WRs",
   delivery: "Deliveries and DRs",
 };
+import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app-store";
 
@@ -24,6 +26,46 @@ const DEMO: { email: string; title: string; name: string; scope: string }[] = [
   { email: "depthead@ifixz.com", title: "Department Head", name: "Carlo Reyes", scope: "Business overview, sync, and team roles" },
   ...POSITIONS.map((p) => ({ email: STAFF[p].email, title: POSITION_LABEL[p], name: STAFF[p].name, scope: POSITION_SCOPE[p] })),
 ];
+
+/** Sun/moon switch. Flips between light and dark from whatever is showing now. */
+function ThemeSwitch() {
+  const { theme, setTheme } = useTheme();
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
+  useEffect(() => {
+    const root = document.documentElement;
+    const sync = () => setDark(root.classList.contains("dark"));
+    sync();
+    const mo = new MutationObserver(sync);
+    mo.observe(root, { attributes: true, attributeFilter: ["class"] });
+    return () => mo.disconnect();
+  }, [theme]);
+  return (
+    <button
+      type="button" role="switch" aria-checked={dark} aria-label={dark ? "Switch to light mode" : "Switch to dark mode"}
+      onClick={() => setTheme(dark ? "light" : "dark")}
+      className="relative inline-flex h-9 w-[68px] items-center rounded-full border border-border/60 bg-card p-1 shadow-soft transition-colors duration-300 hover:bg-muted dark:border-border"
+    >
+      <span className={cn(
+        "absolute left-1 top-1 grid h-7 w-7 place-items-center rounded-full bg-primary text-primary-foreground shadow-soft transition-transform duration-500 ease-fluid",
+        dark && "translate-x-[30px]",
+      )}>
+        {dark ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
+      </span>
+      <Sun className={cn("ml-1.5 h-3.5 w-3.5 transition-opacity duration-300", dark ? "opacity-50" : "opacity-0")} aria-hidden />
+      <Moon className={cn("ml-auto mr-1.5 h-3.5 w-3.5 transition-opacity duration-300", dark ? "opacity-0" : "opacity-50")} aria-hidden />
+    </button>
+  );
+}
+
+/** The iFixz logo is white; on light surfaces it's tinted dark so it stays visible. */
+function IfixzLogo({ className, onDark }: { className?: string; onDark?: boolean }) {
+  return (
+    <img
+      src={ifixzLogo} alt="iFixz Enterprise Co." draggable={false}
+      className={cn("h-auto select-none", !onDark && "brightness-0 opacity-80 dark:opacity-100 dark:brightness-100", className)}
+    />
+  );
+}
 
 const GLOW = "#5ee7ff";
 const CORE = "#e6fbff";
@@ -192,7 +234,7 @@ export function LoginPage() {
   return (
     <div className="grid min-h-full lg:grid-cols-[1.05fr_1fr]">
       <section className="relative m-3 hidden overflow-hidden rounded-3xl bg-gradient-to-br from-[#16303f] via-[#122634] to-[#0b1822] p-12 text-white shadow-float duration-700 [&_rect.fill-primary]:fill-[hsl(192_50%_42%)] ease-fluid animate-in fade-in-0 slide-in-from-left-4 lg:flex lg:flex-col">
-        <div className="flex items-center gap-2.5"><ZentraMark /><span className="text-[17px] font-semibold">Zentra</span></div>
+        <IfixzLogo onDark className="w-40 drop-shadow-[0_0_18px_rgba(94,231,255,0.25)] xl:w-44" />
         <div className="mt-auto">
           <div className="max-w-md">
             <h1 className="text-3xl font-semibold leading-tight tracking-tight">
@@ -207,9 +249,14 @@ export function LoginPage() {
         <p className="mt-auto pt-10 text-xs text-slate-500">iFixz Workspace · Powered by Zentra</p>
       </section>
 
-      <section className="safe-top flex min-w-0 items-center justify-center px-5 py-10 sm:px-10">
-        <div className="w-full max-w-md duration-700 ease-fluid animate-in fade-in-0 slide-in-from-bottom-3">
-          <ZentraLogo className="mb-8 lg:hidden" />
+      <section className="relative flex min-w-0 flex-col items-center px-5 pb-16 pt-[max(5rem,env(safe-area-inset-top))] sm:px-10">
+        <div className="absolute right-5 top-[max(1.25rem,env(safe-area-inset-top))] sm:right-8 sm:top-8"><ThemeSwitch /></div>
+        {/* my-auto centers vertically without pushing the top off-screen when the content is taller. */}
+        <div className="my-auto w-full max-w-md duration-700 ease-fluid animate-in fade-in-0 slide-in-from-bottom-3">
+          <div className="mb-8 flex items-center gap-3 lg:hidden">
+            <IfixzLogo className="w-28" />
+            <span className="border-l border-border pl-3 text-xs text-muted-foreground">Workspace<br />Powered by Zentra</span>
+          </div>
           <h2 className="text-2xl font-semibold tracking-tight">Sign in</h2>
           <p className="mt-1 text-sm text-muted-foreground">Use your iFixz work account.</p>
 
