@@ -1,6 +1,7 @@
 import { Check, Minus, Search } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
+import { confirmAction } from "@/components/app/confirm";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -77,7 +78,9 @@ function AdminUsers() {
   const [q, setQ] = useState("");
   const list = users.filter((u) => `${u.name} ${u.email}`.toLowerCase().includes(q.toLowerCase()));
   const roleControl = (u: User) => u.id === me.id || u.role === "super_admin" ? <Badge variant="secondary">{ROLE_LABEL[u.role]}</Badge> : (
-    <Select value={u.role} onValueChange={(v) => { setUserRole(u.id, v as Role); toast.success(`${u.name} is now a ${ROLE_LABEL[v as Role]}`); }}>
+    <Select value={u.role} onValueChange={async (v) => {
+      if (!(await confirmAction({ title: `Change ${u.name}'s role?`, description: "Their pages and permissions change as soon as you confirm.", details: [["From", ROLE_LABEL[u.role]], ["To", ROLE_LABEL[v as Role]]], confirmLabel: "Change role" }))) return;
+      setUserRole(u.id, v as Role); toast.success(`${u.name} is now a ${ROLE_LABEL[v as Role]}`); }}>
       <SelectTrigger className="h-8 w-56" aria-label={`${u.name}'s role`}><SelectValue /></SelectTrigger>
       <SelectContent>
         <SelectItem value="dept_head">Department Head</SelectItem>
@@ -89,7 +92,11 @@ function AdminUsers() {
     <Switch
       disabled={u.id === me.id}
       checked={u.status === "active"}
-      onCheckedChange={(v) => { setUserStatus(u.id, v ? "active" : "disabled"); toast.success(v ? `${u.name} can sign in` : `${u.name}'s account is disabled`); }}
+      onCheckedChange={async (v) => {
+        if (!(await confirmAction(v
+          ? { title: `Let ${u.name} sign in?`, description: "Their account is enabled and they can sign in again.", confirmLabel: "Enable account" }
+          : { title: `Disable ${u.name}'s account?`, description: "They're signed out of new sessions and can't sign in until you enable the account again.", confirmLabel: "Disable account", destructive: true }))) return;
+        setUserStatus(u.id, v ? "active" : "disabled"); toast.success(v ? `${u.name} can sign in` : `${u.name}'s account is disabled`); }}
       aria-label={`Allow ${u.name} to sign in`}
     />
   );
@@ -99,7 +106,11 @@ function AdminUsers() {
     return (
       <Switch
         checked={!!u.financialAccess}
-        onCheckedChange={(v) => { const r = setFinancialAccess(u.id, v); if (r.ok) toast.success(v ? `${u.name} can now see amounts` : `${u.name} can no longer see amounts`); }}
+        onCheckedChange={async (v) => {
+          if (!(await confirmAction(v
+            ? { title: `Let ${u.name} see financial data?`, description: "They'll see order amounts, unit costs, and receivables.", confirmLabel: "Grant access" }
+            : { title: `Hide financial data from ${u.name}?`, description: "Amounts and costs will show as ₱ •••• for them.", confirmLabel: "Remove access", destructive: true }))) return;
+          const r = setFinancialAccess(u.id, v); if (r.ok) toast.success(v ? `${u.name} can now see amounts` : `${u.name} can no longer see amounts`); }}
         aria-label={`Let ${u.name} see financial data`}
       />
     );
@@ -217,13 +228,33 @@ function TeamAccess() {
   const users = useApp((s) => s.users);
   // Baseline modules follow the role; only modules registered later need a per-person grant.
   const extraModules = useApp((s) => s.modules.filter((m) => m.active && !m.baseline));
-  const { setModuleAccess, setUserPosition } = useApp.getState();
+  const { setModuleAccess, setUserPosition, setTeamKpiAccess } = useApp.getState();
+  const kpiSwitch = (u: User) => (
+    <Switch
+      checked={!!u.teamKpiAccess}
+      onCheckedChange={async (v) => {
+        if (!(await confirmAction(v
+          ? { title: `Let ${u.name} see team KPIs?`, description: "They'll see every Operations employee's KPIs and the department totals on the Performance page.", confirmLabel: "Grant access" }
+          : { title: `Remove ${u.name}'s team KPI access?`, description: "They'll only see their own KPIs.", confirmLabel: "Remove access", destructive: true }))) return;
+        const r = setTeamKpiAccess(u.id, v);
+        if (r.ok) toast.success(v ? `${u.name} can now see team KPIs` : `${u.name} now sees only their own KPIs`);
+        else toast.error(r.errors?.[0] ?? "Couldn't change KPI access");
+      }}
+      aria-label={`Let ${u.name} see team KPIs`}
+    />
+  );
   const team = users.filter((u) => u.role === "employee" && u.department === me.department);
 
   const positionSelect = (u: User) => (
     <Select
       value={u.position ?? ""}
-      onValueChange={(v) => {
+      onValueChange={async (v) => {
+        if (!(await confirmAction({
+          title: `Move ${u.name} to ${POSITION_LABEL[v as Position]}?`,
+          description: "Their pages, order steps, and access to amounts follow the new role right away.",
+          details: [["From", u.position ? POSITION_LABEL[u.position] : "Unassigned"], ["To", POSITION_LABEL[v as Position]]],
+          confirmLabel: "Change role",
+        }))) return;
         const r = setUserPosition(u.id, v as Position);
         if (r.ok) toast.success(`${u.name} is now in ${POSITION_LABEL[v as Position]}`);
         else toast.error(r.errors?.[0] ?? "Couldn't change the role");
@@ -234,7 +265,9 @@ function TeamAccess() {
     </Select>
   );
   const accessSelect = (u: User, m: { id: string; name: string }) => (
-    <Select value={u.moduleAccess[m.id] ?? "none"} onValueChange={(v) => { setModuleAccess(u.id, m.id, v as ModuleAccess); toast.success(`${u.name}: ${m.name} access updated`); }}>
+    <Select value={u.moduleAccess[m.id] ?? "none"} onValueChange={async (v) => {
+      if (!(await confirmAction({ title: `Change ${u.name}'s access to ${m.name}?`, description: "The change applies right away.", details: [["From", u.moduleAccess[m.id] ?? "none"], ["To", v]], confirmLabel: "Change access" }))) return;
+      setModuleAccess(u.id, m.id, v as ModuleAccess); toast.success(`${u.name}: ${m.name} access updated`); }}>
       <SelectTrigger className="h-8 w-32" aria-label={`${u.name} access to ${m.name}`}><SelectValue /></SelectTrigger>
       <SelectContent>
         <SelectItem value="none">No access</SelectItem>
@@ -263,6 +296,7 @@ function TeamAccess() {
                     <TableHead>Role / position</TableHead>
                     <TableHead className="hidden lg:table-cell">Inventory</TableHead>
                     <TableHead className="hidden lg:table-cell">Amounts and costs</TableHead>
+                    <TableHead>Team KPIs</TableHead>
                     {extraModules.map((m) => <TableHead key={m.id}>{m.name}</TableHead>)}
                   </TableRow>
                 </TableHeader>
@@ -276,6 +310,7 @@ function TeamAccess() {
                       <TableCell>{positionSelect(u)}</TableCell>
                       <TableCell className="hidden lg:table-cell">{yesNo(moduleAccess(u, "ims") === "edit", moduleAccess(u, "ims") === "edit" ? "Can edit" : "View only")}</TableCell>
                       <TableCell className="hidden lg:table-cell">{yesNo(canViewFinancials(u), canViewFinancials(u) ? "Visible" : "Hidden")}</TableCell>
+                      <TableCell>{kpiSwitch(u)}</TableCell>
                       {extraModules.map((m) => <TableCell key={m.id}>{accessSelect(u, m)}</TableCell>)}
                     </TableRow>
                   ))}
@@ -293,6 +328,10 @@ function TeamAccess() {
                   <div className="flex flex-wrap gap-x-4 gap-y-1">
                     {yesNo(moduleAccess(u, "ims") === "edit", moduleAccess(u, "ims") === "edit" ? "Edits inventory" : "Views inventory")}
                     {yesNo(canViewFinancials(u), canViewFinancials(u) ? "Sees amounts" : "Amounts hidden")}
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-muted-foreground">Team KPIs</span>
+                    {kpiSwitch(u)}
                   </div>
                   {extraModules.map((m) => (
                     <div key={m.id} className="flex items-center justify-between gap-3">
