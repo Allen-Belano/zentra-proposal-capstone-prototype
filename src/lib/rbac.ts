@@ -83,6 +83,31 @@ export function canViewFinancials(user: User | null | undefined): boolean {
 /** Financial access that comes with the position itself, so it can't be revoked separately. */
 export const financialByPosition = (user: User) => !!user.position && FINANCIAL_POSITIONS.includes(user.position);
 
+/** Daily Process Summary: Accounting and Department Heads only. */
+export function canViewDailySummary(user: User | null | undefined): boolean {
+  if (!user || user.status !== "active") return false;
+  return user.role === "dept_head" || (user.role === "employee" && user.position === "accounting");
+}
+
+/** Monthly Metrics: Department Heads only. */
+export function canViewMonthlyMetrics(user: User | null | undefined): boolean {
+  return !!user && user.status === "active" && user.role === "dept_head";
+}
+
+/**
+ * KPIs: everyone sees their own; the Department Head sees every employee and the department
+ * total; other employees only when the Department Head has explicitly granted team KPI access.
+ */
+export function canViewTeamKpis(user: User | null | undefined): boolean {
+  if (!user || user.status !== "active") return false;
+  return user.role === "dept_head" || (user.role === "employee" && !!user.teamKpiAccess);
+}
+
+export function canViewKpisOf(viewer: User | null | undefined, target: User): boolean {
+  if (!viewer || viewer.status !== "active") return false;
+  return viewer.id === target.id || (canViewTeamKpis(viewer) && viewer.department === target.department);
+}
+
 /** Whether the user holds the position that must act on an order step. */
 export function canActAs(user: User | null | undefined, position: Position | undefined): boolean {
   return !!user && user.status === "active" && user.role === "employee" && !!position && user.position === position;
@@ -96,6 +121,8 @@ export const PERMISSION_MATRIX: { label: string; roles: Record<Role, boolean> }[
   { label: "Run the ETL pipeline and set validation rules", roles: { super_admin: false, dept_head: true, employee: false } },
   { label: "Review sync issues and run batch processing", roles: { super_admin: false, dept_head: true, employee: false } },
   { label: "Manage backups and restore points", roles: { super_admin: false, dept_head: true, employee: false } },
+  { label: "View monthly metrics and customize the Overview", roles: { super_admin: false, dept_head: true, employee: false } },
+  { label: "View every employee's KPIs and department KPIs", roles: { super_admin: false, dept_head: true, employee: false } },
   { label: "Assign employees to an Operations role", roles: { super_admin: false, dept_head: true, employee: false } },
   { label: "Work on orders in their assigned step", roles: { super_admin: false, dept_head: false, employee: true } },
   { label: "Monitor orders and activity", roles: { super_admin: true, dept_head: true, employee: true } },
@@ -112,4 +139,6 @@ export const POSITION_MATRIX: { label: string; positions: Position[] }[] = [
   { label: "Issue sales invoices (SI) and written reports (WR)", positions: ["invoicing"] },
   { label: "Deliver orders and record DRs", positions: ["delivery"] },
   { label: "See amounts, costs, and receivables", positions: FINANCIAL_POSITIONS },
+  { label: "See the Daily process summary", positions: ["accounting"] },
+  { label: "See their own KPIs", positions: POSITIONS },
 ];
