@@ -5,6 +5,7 @@ import {
   Puzzle, RefreshCw, RotateCcw, ScrollText, ShieldCheck, Sun, Users, Workflow,
 } from "lucide-react";
 import { toast } from "sonner";
+import { confirmAction } from "@/components/app/confirm";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -170,7 +171,10 @@ function UserMenu() {
           ))}
         </div>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => { resetDemo(); toast.success("Demo data reset"); }}>
+        <DropdownMenuItem onSelect={async () => {
+          if (!(await confirmAction({ title: "Reset all demo data?", description: "Every order, record, setting, and notification goes back to the starting sample data. Changes made in this browser are lost.", confirmLabel: "Reset demo data", destructive: true }))) return;
+          resetDemo(); toast.success("Demo data reset");
+        }}>
           <RotateCcw /> Reset demo data
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => { logout(); navigate({ to: "/login" }); }}>
@@ -354,7 +358,10 @@ export function AppShell() {
 
 export function useSyncNowToast() {
   const syncNow = useApp((s) => s.syncNow);
-  return (moduleId: string) => {
+  const modules = useApp((s) => s.modules);
+  return async (moduleId: string) => {
+    const m = modules.find((x) => x.id === moduleId);
+    if (!(await confirmAction({ title: `Sync ${m?.name ?? "this module"} now?`, description: `Zentra pulls changes and new records from ${m?.source ?? "the source system"}. New records go through validation first.`, confirmLabel: "Sync now" }))) return;
     const r = syncNow(moduleId);
     if (r.failed) toast.error("Bitrix24 is unreachable", { description: "Showing the last synced data. Try again when the connection is back." });
     else if (!r.pulled && !r.updated && !r.rejected) toast("Already up to date", { icon: <RefreshCw className="h-4 w-4" /> });
