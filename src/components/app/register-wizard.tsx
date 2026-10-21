@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, ArrowRight, Check, FileJson, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { confirmAction } from "@/components/app/confirm";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -168,7 +169,13 @@ function GuidedSetup({ atLimit, onDone }: { atLimit: boolean; onDone: () => void
     setStep((s) => s + 1);
   };
 
-  const register = () => {
+  const register = async () => {
+    if (!(await confirmAction({
+      title: `Register ${d.name.trim()}?`,
+      description: d.activate ? "It goes live in the sidebar right away, with its generated validation rules." : "It's saved as inactive. You can activate it from the registry later.",
+      details: [["Address", `/modules/${d.key}`], ["Type", external ? `External · ${adapter.label}` : "Native"], ["Fields", String(fields.length)], ["Validation rules", String(rules.length)]],
+      confirmLabel: "Register module",
+    }))) return;
     if (atLimit) return setErrors({ submit: `The registry supports up to ${MAX_ADDITIONAL} modules beyond Inventory and Operations.` });
     const template = SCHEMA_TEMPLATES[d.template];
     const connection = Object.fromEntries(Object.entries(d.connection).filter(([, v]) => v.trim()));
@@ -511,10 +518,16 @@ function ManifestImport({ atLimit, onDone }: { atLimit: boolean; onDone: () => v
   const registerModule = useApp((s) => s.registerModule);
   const [text, setText] = useState(SAMPLE_MANIFEST);
   const [errors, setErrors] = useState<string[]>([]);
-  const submit = () => {
+  const submit = async () => {
     if (atLimit) return setErrors([`The registry supports up to ${MAX_ADDITIONAL} modules beyond Inventory and Operations.`]);
     const { mod, rules, errors } = parseManifest(text);
     if (!mod) return setErrors(errors);
+    if (!(await confirmAction({
+      title: `Register ${mod.name} from this manifest?`,
+      description: "It goes live in the sidebar right away.",
+      details: [["Address", `/modules/${mod.id}`], ["Fields", String(mod.fields.length)], ["Validation rules", String(rules?.length ?? 0)]],
+      confirmLabel: "Register module",
+    }))) return;
     const r = registerModule(mod, rules);
     if (!r.ok) return setErrors(r.errors ?? []);
     toast.success(`${mod.name} registered`, { description: "It's in the sidebar now. Grant employees access under Team access." });

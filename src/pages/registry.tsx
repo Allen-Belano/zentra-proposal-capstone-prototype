@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowLeft, Ban, Check, Eye, Plus } from "lucide-react";
+import { Ban, Check, Eye, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { confirmAction } from "@/components/app/confirm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState, PageHeader } from "@/components/app/bits";
 import { ModuleIcon } from "@/components/app/module-icon";
@@ -65,7 +65,10 @@ function ModuleCard({ m, onDeactivate }: { m: ModuleDef; onDeactivate: (m: Modul
             <Button asChild variant="secondary" size="sm"><Link to="/modules/$moduleId" params={{ moduleId: m.id }}><Eye />Open</Link></Button>
           )}
           {external && (
-            <Select value={m.adapter.frequency} onValueChange={(v) => { setModuleFrequency(m.id, v as SyncFrequency); toast.success("Sync frequency updated"); }}>
+            <Select value={m.adapter.frequency} onValueChange={async (v) => {
+              if (!(await confirmAction({ title: `Change how often ${m.name} syncs?`, description: `Zentra will sync with ${m.source} on the new schedule.`, details: [["From", FREQUENCY_LABEL[m.adapter.frequency]], ["To", FREQUENCY_LABEL[v as SyncFrequency]]], confirmLabel: "Change sync" }))) return;
+              setModuleFrequency(m.id, v as SyncFrequency); toast.success("Sync frequency updated");
+            }}>
               <SelectTrigger className="h-8 w-40" aria-label="Sync frequency"><SelectValue /></SelectTrigger>
               <SelectContent>{(Object.keys(FREQUENCY_LABEL) as SyncFrequency[]).map((f) => <SelectItem key={f} value={f}>{FREQUENCY_LABEL[f]}</SelectItem>)}</SelectContent>
             </Select>
@@ -73,7 +76,9 @@ function ModuleCard({ m, onDeactivate }: { m: ModuleDef; onDeactivate: (m: Modul
           {m.active ? (
             <Button variant="ghost" size="sm" onClick={() => onDeactivate(m)}><Ban />Deactivate</Button>
           ) : (
-            <Button size="sm" onClick={() => { setModuleActive(m.id, true); toast.success(`${m.name} activated`, { description: "It's back in the sidebar with its records." }); }}><Check />Activate</Button>
+            <Button size="sm" onClick={async () => {
+              if (!(await confirmAction({ title: `Activate ${m.name}?`, description: "It returns to the sidebar with its records, and anyone with access can use it again.", confirmLabel: "Activate" }))) return;
+              setModuleActive(m.id, true); toast.success(`${m.name} activated`, { description: "It's back in the sidebar with its records." }); }}><Check />Activate</Button>
           )}
         </div>
       </div>
@@ -120,7 +125,16 @@ export function RegistryPage() {
   const setModuleActive = useApp((s) => s.setModuleActive);
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<FilterId>("all");
-  const [confirm, setConfirm] = useState<ModuleDef | null>(null);
+  const deactivate = async (m: ModuleDef) => {
+    const ok = await confirmAction({
+      title: `Deactivate ${m.name}?`,
+      description: `It disappears from the sidebar and its page stops opening${m.kind === "external" ? ", and syncing pauses" : ""}. Its records stay in the central database, and you can activate it again at any time.`,
+      confirmLabel: "Deactivate", destructive: true,
+    });
+    if (!ok) return;
+    setModuleActive(m.id, false);
+    toast(`${m.name} deactivated`, { description: "Its records are kept. Activate it again from the registry." });
+  };
   const additional = modules.filter((m) => !m.baseline).length;
   const current = FILTERS.find((f) => f.id === filter)!;
   const list = modules.filter(current.match);
@@ -149,30 +163,11 @@ export function RegistryPage() {
       {list.length === 0 ? (
         <Card><EmptyState title="No modules match this filter" description="Pick another filter or register a new module." /></Card>
       ) : (
-        <div className="stagger grid gap-4">{list.map((m) => <ModuleCard key={m.id} m={m} onDeactivate={setConfirm} />)}</div>
+        <div className="stagger grid gap-4">{list.map((m) => <ModuleCard key={m.id} m={m} onDeactivate={deactivate} />)}</div>
       )}
 
       <RegisterModuleDialog open={open} onOpenChange={setOpen} atLimit={additional >= MAX_ADDITIONAL} />
 
-      <Dialog open={!!confirm} onOpenChange={(o) => !o && setConfirm(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Deactivate {confirm?.name}?</DialogTitle>
-            <DialogDescription>
-              It disappears from the sidebar and its page stops opening{confirm?.kind === "external" ? ", and syncing pauses" : ""}. Its records stay in the central database, and you can activate it again at any time.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setConfirm(null)}><ArrowLeft />Keep it active</Button>
-            <Button variant="destructive" onClick={() => {
-              if (!confirm) return;
-              setModuleActive(confirm.id, false);
-              toast(`${confirm.name} deactivated`, { description: "Its records are kept. Activate it again from the registry." });
-              setConfirm(null);
-            }}><Ban />Deactivate</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
