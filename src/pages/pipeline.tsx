@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Check, FileUp, Loader2, Play, Plus, Trash2, Wrench, X } from "lucide-react";
 import { toast } from "sonner";
+import { confirmAction } from "@/components/app/confirm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,6 +51,13 @@ function RunDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenChange
     if (!file) return;
     const parsed = parseCsv(file.text);
     if (!parsed.length) { toast.error("No rows found", { description: "The file needs a header row and at least one data row." }); return; }
+    const target = modules.find((m) => m.id === moduleId);
+    if (!(await confirmAction({
+      title: `Run the pipeline on ${file.name}?`,
+      description: "Valid rows are loaded into the central database. Rows that fail validation go to the rejected-records ledger.",
+      details: [["Module", target?.name ?? moduleId], ["Rows", String(parsed.length)]],
+      confirmLabel: "Run pipeline",
+    }))) return;
     setRows(parsed.length);
     for (let i = 0; i < STAGES.length; i++) { setStage(i); await sleep(550); }
     const run = runPipeline(moduleId, file.name, parsed);
@@ -202,7 +210,10 @@ function RejectedTab() {
                     {r.status === "open" && (
                       <div className="flex gap-1">
                         <Button size="sm" variant="outline" onClick={() => setFixing(r)}><Wrench />Fix</Button>
-                        <Button size="icon" variant="ghost" aria-label="Dismiss" onClick={() => { dismissRejected(r.id); toast("Row dismissed"); }}><X /></Button>
+                        <Button size="icon" variant="ghost" aria-label="Dismiss" onClick={async () => {
+                          if (!(await confirmAction({ title: `Dismiss row ${r.rowIndex}?`, description: "It won't be imported. It stays in the ledger marked Dismissed.", confirmLabel: "Dismiss row", destructive: true }))) return;
+                          dismissRejected(r.id); toast("Row dismissed");
+                        }}><X /></Button>
                       </div>
                     )}
                   </TableCell>
@@ -222,7 +233,8 @@ function RejectedTab() {
           title={`Fix row ${fixing.rowIndex}`}
           description="Correct the values, then reload the row through validation."
           submitLabel="Reload row"
-          onSubmit={(data) => {
+          onSubmit={async (data) => {
+            if (!(await confirmAction({ title: `Reload row ${fixing.rowIndex}?`, description: "The corrected row goes through validation again. If it passes, it's loaded into the central database.", confirmLabel: "Reload row" }))) return null;
             const r = reloadRejected(fixing.id, data);
             if (r.ok) { setFixing(null); toast.success("Row reloaded", { description: "It passed validation and was loaded." }); }
             return r;
@@ -263,14 +275,23 @@ function RulesTab() {
           {list.length === 0 && <EmptyState title="No rules yet" description="Add a rule below. Without rules, every row is accepted." />}
           {list.map((r) => (
             <div key={r.id} className="flex items-center gap-3 px-4 py-3">
-              <Switch checked={r.enabled} onCheckedChange={() => toggleRule(r.id)} aria-label="Enable rule" />
+              <Switch checked={r.enabled} onCheckedChange={async () => {
+                const name = mod.fields.find((f) => f.key === r.field)?.label ?? r.field;
+                if (!(await confirmAction(r.enabled
+                  ? { title: `Turn off this rule for ${name}?`, description: "New imports, syncs, and form entries won't be checked against it.", confirmLabel: "Turn off", destructive: true }
+                  : { title: `Turn on this rule for ${name}?`, description: "New imports, syncs, and form entries will be checked against it.", confirmLabel: "Turn on" }))) return;
+                toggleRule(r.id);
+              }} aria-label="Enable rule" />
               <div className={cn("min-w-0 flex-1", !r.enabled && "opacity-50")}>
                 <div className="text-sm font-medium">{mod.fields.find((f) => f.key === r.field)?.label ?? r.field}</div>
                 <div className="truncate text-xs text-muted-foreground">
                   {RULE_LABEL[r.kind]}{r.value ? `: ${r.kind === "oneOf" ? r.value.split("|").join(", ") : r.value}` : ""}
                 </div>
               </div>
-              <Button size="icon" variant="ghost" aria-label="Remove rule" onClick={() => { removeRule(r.id); toast("Rule removed"); }}><Trash2 /></Button>
+              <Button size="icon" variant="ghost" aria-label="Remove rule" onClick={async () => {
+                if (!(await confirmAction({ title: "Remove this rule?", description: `${RULE_LABEL[r.kind]} on ${mod.fields.find((f) => f.key === r.field)?.label ?? r.field} will no longer be checked.`, confirmLabel: "Remove rule", destructive: true }))) return;
+                removeRule(r.id); toast("Rule removed");
+              }}><Trash2 /></Button>
             </div>
           ))}
         </div>
@@ -298,7 +319,15 @@ function RulesTab() {
           </div>
           <Button
             disabled={!field || (needsValue && !value)}
-            onClick={() => { addRule({ moduleId: mod.id, field, kind, value: needsValue ? value : undefined }); setValue(""); toast.success("Rule added"); }}
+            onClick={async () => {
+              if (!(await confirmAction({
+                title: "Add this validation rule?",
+                description: "New imports, syncs, and form entries will be checked against it. Existing records aren't changed.",
+                details: [["Field", mod.fields.find((f) => f.key === field)?.label ?? field], ["Rule", RULE_LABEL[kind]], ...(needsValue ? [["Value", value] as [string, string]] : [])],
+                confirmLabel: "Add rule",
+              }))) return;
+              addRule({ moduleId: mod.id, field, kind, value: needsValue ? value : undefined }); setValue(""); toast.success("Rule added");
+            }}
           ><Plus />Add rule</Button>
         </div>
       </CardContent>
