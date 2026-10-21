@@ -38,17 +38,17 @@ function ConflictCard({ op }: { op: SyncOperation }) {
         </div>
       </CardHeader>
       <CardContent className="grid gap-4">
-        <div className="overflow-x-auto rounded-2xl bg-muted">
+        <div className="overflow-x-auto rounded-2xl bg-muted py-1">
           <table className="w-full text-sm">
             <thead><tr className="border-b text-left text-xs text-muted-foreground">
-              <th className="px-2 py-2 font-medium sm:px-3">Field</th><th className="px-2 py-2 font-medium sm:px-3">Zentra</th><th className="px-2 py-2 font-medium sm:px-3">{mod.source}</th>
+              <th className="px-2 py-2.5 font-medium sm:px-3">Field</th><th className="px-2 py-2.5 font-medium sm:px-3">Zentra</th><th className="px-2 py-2.5 font-medium sm:px-3">{mod.source}</th>
             </tr></thead>
             <tbody>
               {diff.map((f) => (
                 <tr key={f.key} className="border-b last:border-0">
-                  <td className="px-2 py-2 text-muted-foreground sm:px-3">{f.label}</td>
-                  <td className="px-2 py-2 font-medium sm:px-3">{fmt(f.key, local[f.key])}</td>
-                  <td className="px-2 py-2 font-medium sm:px-3">{fmt(f.key, remote[f.key])}</td>
+                  <td className="px-2 py-2.5 text-muted-foreground sm:px-3">{f.label}</td>
+                  <td className="px-2 py-2.5 font-medium sm:px-3">{fmt(f.key, local[f.key])}</td>
+                  <td className="px-2 py-2.5 font-medium sm:px-3">{fmt(f.key, remote[f.key])}</td>
                 </tr>
               ))}
             </tbody>
