@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 
 // Rows have no dividers: the header sits in a rounded grey strip and rows highlight as rounded bands on hover.
 export const Table = ({ className, ...p }: React.HTMLAttributes<HTMLTableElement>) => (
-  <div className="relative w-full overflow-x-auto px-1 py-2 sm:px-2">
+  <div className="relative w-full overflow-x-auto px-1 pb-3 pt-2 sm:px-2">
     <table className={cn("w-full caption-bottom border-separate border-spacing-0 text-sm", className)} {...p} />
   </div>
 );
