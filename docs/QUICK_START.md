@@ -55,12 +55,14 @@ That's it. The order moves to the next role, that role gets notified, and Bitrix
 |---|---|
 | See what's waiting on you | **Overview** |
 | Find any order | **Order tracking** |
-| Check today's work, paid and unpaid | **Overview → Daily process summary** |
+| Check today's work, paid and unpaid | **Overview → Daily process summary** (Accounting and Department Head only) |
+| See your KPIs | **Overview → My KPIs**, or **Performance** |
 | Look up stock | **Inventory** |
 | Change the theme or sign out | Your avatar, top right |
 
 ## 6. Good to know
 
+- Zentra asks you to **confirm** before any change is saved. Check the summary, then click the confirm button, or **Cancel** to leave things as they are.
 - **₱ ••••** means amounts are hidden for your role. Ask the Super Admin if you need access.
 - Orders marked **Overdue**, **On hold**, or **No progress** are delayed. Handle those first.
 - **Syncing** next to an order means it's being sent to Bitrix24. **Failed** or **Conflict** means the Department Head needs to check the Sync center.
