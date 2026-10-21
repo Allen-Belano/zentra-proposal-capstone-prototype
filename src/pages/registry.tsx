@@ -84,7 +84,7 @@ function ModuleCard({ m, onDeactivate }: { m: ModuleDef; onDeactivate: (m: Modul
       </div>
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <dl className="rounded-2xl bg-muted px-4 py-2.5">
+        <dl className="rounded-2xl bg-muted px-4 py-3">
           <KV label="Address"><span className="font-mono text-xs">/modules/{m.id}</span></KV>
           <KV label="Owner">{m.owner ?? "—"}</KV>
           <KV label="Adapter">{external ? `${ADAPTER_LABEL[m.adapter.type]} · ${m.source}` : "Native: entered in Zentra"}</KV>
@@ -95,12 +95,12 @@ function ModuleCard({ m, onDeactivate }: { m: ModuleDef; onDeactivate: (m: Modul
         </dl>
         <div className="grid content-start gap-3">
           {connection.length > 0 && (
-            <dl className="rounded-2xl bg-muted px-4 py-2.5">
+            <dl className="rounded-2xl bg-muted px-4 py-3">
               <p className="pb-1 pt-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">Connection</p>
               {connection.map(([k, v]) => <KV key={k} label={connLabel(k)}><span className="break-all font-mono text-xs">{v}</span></KV>)}
             </dl>
           )}
-          <dl className="rounded-2xl bg-muted px-4 py-2.5">
+          <dl className="rounded-2xl bg-muted px-4 py-3">
             <p className="pb-1 pt-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">Field mapping</p>
             {!external ? (
               <p className="py-1.5 text-sm text-muted-foreground">Records are typed directly in this module.</p>
