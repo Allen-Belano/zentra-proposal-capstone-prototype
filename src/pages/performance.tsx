@@ -184,7 +184,7 @@ export function PerformancePage() {
   const { employees, prevName } = useKpiData(month);
   const [selected, setSelected] = useState<string | undefined>();
 
-  if (!me || me.role === "super_admin") return <Forbidden message="Performance numbers are for the Operations department: each employee and their Department Head." />;
+  if (!me || me.role === "super_admin") return <Forbidden message="Performance numbers are for the Operations department: each employee and their Operations Department Head." />;
   const team = canViewTeamKpis(me);
   const mine = employees.find((k) => k.user.id === me.id);
   const visible = employees.filter((k) => canViewKpisOf(me, k.user));
@@ -197,7 +197,7 @@ export function PerformancePage() {
         help={TERM_HELP.keyNumbers}
         description={team
           ? "Key numbers for each Operations employee and the department, measured from completed order stages."
-          : "Your key numbers, measured from the order stages you complete. Only you and your Department Head can see them."}
+          : "Your key numbers, measured from the order stages you complete. Only you and your Operations Department Head can see them."}
         actions={
           <MonthPicker value={month} months={months} onChange={setMonth} />
         }
@@ -209,7 +209,7 @@ export function PerformancePage() {
             <KpiCard k={mine} prevName={prevName} />
           </section>
         )}
-        {!mine && !team && <Card><EmptyState title="No performance numbers yet" description="Ask your Department Head to assign your Operations role." /></Card>}
+        {!mine && !team && <Card><EmptyState title="No performance numbers yet" description="Ask your Operations Department Head to assign your Operations role." /></Card>}
         {team && (
           <>
             <section className="grid gap-3">

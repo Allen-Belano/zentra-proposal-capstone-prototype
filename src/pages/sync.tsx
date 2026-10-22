@@ -13,7 +13,7 @@ import { useSyncNowToast } from "@/components/app/app-shell";
 import { EmptyState, PageHeader } from "@/components/app/bits";
 import type { BatchItemKind, BatchOutcome, BatchRun, SyncOperation } from "@/lib/types";
 import { recordLabel } from "@/lib/validation";
-import { TERM_HELP } from "@/lib/terms";
+import { PAGE_LABEL, TERM_HELP } from "@/lib/terms";
 import { cn, formatDate, formatDateTime, formatPeso, timeAgo } from "@/lib/utils";
 import { useApp, type ConflictPolicy } from "@/store/app-store";
 
@@ -172,7 +172,7 @@ function BatchPanel() {
     });
     if (!go) return;
     const result = batchProcess(chosen.map(({ kind, id }) => ({ kind, id })), policy);
-    if (!result) return toast.error("Only a Department Head can process records in bulk");
+    if (!result) return toast.error("Only the Operations Department Head can process records in bulk");
     setLast(result);
     setSelected(new Set());
     const ok = result.outcomes.filter((o) => o.result === "success").length;
@@ -247,7 +247,7 @@ export function SyncPage() {
   return (
     <>
       <PageHeader
-        title="Sync"
+        title={PAGE_LABEL.bitrixUpdates}
         help={TERM_HELP.bitrix}
         description="Changes you make are saved in Zentra first, then sent to Bitrix24. When both systems change the same record, you decide which one to keep."
         actions={<Button variant="outline" onClick={() => syncNow("operations")}><RefreshCw />Update now</Button>}

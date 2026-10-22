@@ -13,14 +13,14 @@ export type Permission =
 
 export const ROLE_LABEL: Record<Role, string> = {
   super_admin: "Super Admin",
-  dept_head: "Department Head",
+  dept_head: "Operations Department Head",
   employee: "Department Employee",
 };
 
 /** Compact names for tight spaces such as phone-width tables. */
 export const ROLE_SHORT_LABEL: Record<Role, string> = {
   super_admin: "Admin",
-  dept_head: "Head",
+  dept_head: "Operations Department Head",
   employee: "Employee",
 };
 
@@ -53,12 +53,12 @@ export function can(user: User | null | undefined, permission: Permission): bool
 
 /**
  * The title shown for a person across the app. It names the scope they actually
- * own, so a Department Head of Operations reads "Operations Head" rather than a
+ * own, so a Department Head of Operations reads "Operations Department Head" rather than a
  * generic role name.
  */
 export function titleOf(user: User): string {
   if (user.role === "super_admin") return "IT Administration";
-  if (user.role === "dept_head") return `${user.department} Head`;
+  if (user.role === "dept_head") return `${user.department} Department Head`;
   return "My work";
 }
 
@@ -66,7 +66,7 @@ export function titleOf(user: User): string {
 export function jobTitleOf(user: User): string {
   if (user.role === "employee" && user.position) return POSITION_LABEL[user.position];
   if (user.role === "super_admin") return "Administrator";
-  return `${user.department} Head`;
+  return `${user.department} Department Head`;
 }
 
 /**
@@ -125,7 +125,7 @@ export function canActAs(user: User | null | undefined, position: Position | und
 }
 
 export const PERMISSION_MATRIX: { label: string; roles: Record<Role, boolean> }[] = [
-  { label: "Manage accounts and assign Department Heads", roles: { super_admin: true, dept_head: false, employee: false } },
+  { label: "Manage accounts and assign Operations Department Heads", roles: { super_admin: true, dept_head: false, employee: false } },
   { label: "Grant access to financial data", roles: { super_admin: true, dept_head: false, employee: false } },
   { label: "Review the audit log", roles: { super_admin: true, dept_head: false, employee: false } },
   { label: "Register, activate, and configure modules", roles: { super_admin: false, dept_head: true, employee: false } },

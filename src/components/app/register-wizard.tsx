@@ -247,7 +247,7 @@ function GuidedSetup({ atLimit, onDone }: { atLimit: boolean; onDone: () => void
                   <Field label="Source system" error={errors.source}>
                     <Input value={d.source} placeholder="Legacy IMS" onChange={(e) => set({ source: e.target.value })} />
                   </Field>
-                  <Field label="Sync" hint={d.syncMode === "realtime" ? "Changes sync as they happen, where the source supports it." : "Batch is the fallback for systems without real-time support."}>
+                  <Field label="Updates" hint={d.syncMode === "realtime" ? "Changes sync as they happen, where the source supports it." : "Batch is the fallback for systems without real-time support."}>
                     <div className="grid grid-cols-2 gap-2">
                       <Select value={d.syncMode} onValueChange={(v) => set({ syncMode: v as Draft["syncMode"] })}>
                         <SelectTrigger aria-label="Sync mode"><SelectValue /></SelectTrigger>
@@ -270,7 +270,7 @@ function GuidedSetup({ atLimit, onDone }: { atLimit: boolean; onDone: () => void
                 <Section title="Connection" hint={`${adapter.hint} These are sample settings; the prototype never opens a real connection.`}>
                   {adapter.fields.length === 0 ? (
                     <p className="rounded-2xl bg-muted px-4 py-3 text-sm text-muted-foreground">
-                      There is nothing to set up here. You choose the file to upload on the Data pipeline, and match its columns to the fields you define.
+                      There is nothing to set up here. You choose the file to upload on the File imports page, and match its columns to the fields you define.
                     </p>
                   ) : (
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -383,7 +383,7 @@ function GuidedSetup({ atLimit, onDone }: { atLimit: boolean; onDone: () => void
                 <ReviewRow label="Record">{d.recordName || SCHEMA_TEMPLATES[d.template]?.recordName || "Record"}</ReviewRow>
                 <ReviewRow label="Type">{external ? `External · ${adapter.label} adapter` : "Native"}</ReviewRow>
                 {external && <ReviewRow label="Source">{d.source}</ReviewRow>}
-                {external && <ReviewRow label="Sync">{d.syncMode === "realtime" ? "Real-time where supported" : FREQUENCY_LABEL[d.frequency]}</ReviewRow>}
+                {external && <ReviewRow label="Updates">{d.syncMode === "realtime" ? "Real-time where supported" : FREQUENCY_LABEL[d.frequency]}</ReviewRow>}
               </Review>
               {external ? (
                 <Review title="Connection">

@@ -191,7 +191,7 @@ export const useApp = create<AppState>()(
         };
         if (moduleId === "operations") {
           const fromBitrix = source?.startsWith("Bitrix24");
-          const description = fromBitrix ? "Deal won in Bitrix24; order created in Zentra"
+          const description = fromBitrix ? "Order confirmed in Bitrix24; order created in Zentra"
             : source ? `Order imported from ${source}` : "Order created in Zentra";
           rec.order = {
             docs: { clientPo: String(clean.client_po || "") || undefined },
@@ -355,7 +355,7 @@ export const useApp = create<AppState>()(
           set((s) => ({ pipelineRuns: [...s.pipelineRuns, run], rejected: [...rejectedRows, ...s.rejected] }));
           event({
             moduleId, title: `File import #${run.number} finished`,
-            detail: `${run.loaded} saved, ${run.rejected} need fixing, from ${source}`,
+            detail: `${run.loaded} validated, ${run.rejected} need fixing, from ${source}`,
             level: run.rejected ? "warning" : "success",
           });
           audit("Imported a file", `${m.name}: ${source}`);
@@ -373,7 +373,7 @@ export const useApp = create<AppState>()(
           const rec = load(row.moduleId, data, "the list of records to fix");
           if (m.kind === "external") queueOutbound(rec);
           set((s) => ({ rejected: s.rejected.map((r) => (r.id === rowId ? { ...r, status: "reloaded", raw: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) } : r)) }));
-          audit("Fixed and reloaded rejected row", `${m.name}: ${recordLabel(m, rec.data)}`);
+          audit("Fixed and validated a record that needed fixing", `${m.name}: ${recordLabel(m, rec.data)}`);
           event({ moduleId: m.id, recordId: rec.id, title: `Rejected row fixed: ${recordLabel(m, rec.data)}`, detail: "Passed validation and loaded", level: "success" });
           return { ok: true };
         },
@@ -381,7 +381,7 @@ export const useApp = create<AppState>()(
         dismissRejected: (rowId) => {
           const row = get().rejected.find((r) => r.id === rowId)!;
           set((s) => ({ rejected: s.rejected.map((r) => (r.id === rowId ? { ...r, status: "dismissed" } : r)) }));
-          audit("Dismissed rejected row", `${mod(row.moduleId).name}: row ${row.rowIndex}`);
+          audit("Dismissed a record that needed fixing", `${mod(row.moduleId).name}: row ${row.rowIndex}`);
         },
 
         syncNow: (moduleId) => {
@@ -531,7 +531,7 @@ export const useApp = create<AppState>()(
         },
 
         registerModule: (m, rules = []) => {
-          if (!can(me(), "modules.manage")) return { ok: false, errors: ["Only Department Heads can register modules."] };
+          if (!can(me(), "modules.manage")) return { ok: false, errors: ["Only the Operations Department Head can connect systems."] };
           if (get().modules.some((x) => x.id === m.id)) return { ok: false, errors: [`A module with the key "${m.id}" already exists.`] };
           const full: ModuleDef = { ...m, registeredAt: now(), registeredBy: actorName(), lastSyncedAt: m.kind === "external" ? now() : undefined };
           set((s) => ({
@@ -585,10 +585,10 @@ export const useApp = create<AppState>()(
           const u = me();
           const target = get().users.find((x) => x.id === userId);
           if (!can(u, "access.manage") || !target || target.role !== "employee" || target.department !== u?.department) {
-            return { ok: false, errors: ["Only the Department Head can grant team KPI access in their department."] };
+            return { ok: false, errors: ["Only the Operations Department Head can let the team see key numbers."] };
           }
           set((s) => ({ users: s.users.map((x) => (x.id === userId ? { ...x, teamKpiAccess: on } : x)) }));
-          audit(on ? "Granted team KPI access" : "Revoked team KPI access", target.name);
+          audit(on ? "Shared the team's key numbers" : "Stopped sharing the team's key numbers", target.name);
           return { ok: true };
         },
 

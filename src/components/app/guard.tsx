@@ -13,7 +13,7 @@ export function Forbidden({ message }: { message?: string }) {
     ? "Ask another administrator if you need access."
     : me?.role === "dept_head"
       ? "Ask a Super Admin if you need access."
-      : "Ask your Department Head or Super Admin if you need access.";
+      : "Ask your Operations Department Head or Super Admin if you need access.";
   const fallback = `Your role (${role}) can't open this page. ${ask}`;
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-24 text-center">

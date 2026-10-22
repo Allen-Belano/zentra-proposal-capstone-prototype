@@ -15,7 +15,7 @@ Go to http://localhost:5173 and click your account. The password for every accou
 | Inventory | ana.inventory@ifixz.com |
 | Invoicing | paolo.invoicing@ifixz.com |
 | Delivery | lea.delivery@ifixz.com |
-| Operations Head | depthead@ifixz.com |
+| Operations Department Head | depthead@ifixz.com |
 | IT Administration | superadmin@ifixz.com |
 
 ## 2. Your job in Zentra
@@ -27,7 +27,7 @@ Go to http://localhost:5173 and click your account. The password for every accou
 | **Inventory** | Supplier deliveries and stock | **Post receiving report**. Only you can add or edit inventory items. |
 | **Invoicing** | Sales invoices | **Issue sales invoice and report** |
 | **Delivery** | Getting items to the client | **Record delivery** |
-| **Operations Head** | Watching everything, fixing problems | Overview, **Sync**, **Team access**, **Integration Hub** |
+| **Operations Department Head** | Watching everything, fixing problems | Overview, **Bitrix24 updates**, **Team access**, **Integration Hub** |
 | **IT Administration** | Accounts and access | **Users and roles**, **Audit log** |
 
 ## 3. Move an order forward
@@ -55,7 +55,7 @@ That's it. The order moves to the next role, that role gets notified, and a mess
 |---|---|
 | See what's waiting on you | **Overview** |
 | Find any order | **Order tracking** |
-| Check today's work, paid and unpaid | **Overview → Daily process summary** (Accounting and Operations Head only) |
+| Check today's work, paid and unpaid | **Overview → Daily process summary** (Accounting and Operations Department Head only) |
 | See your performance | **Overview → My performance**, or **Performance** |
 | Look up stock | **Inventory** |
 | Change the theme or sign out | Your avatar, top right |
@@ -65,6 +65,6 @@ That's it. The order moves to the next role, that role gets notified, and a mess
 - Zentra asks you to **confirm** before a change that can't be undone. Check the summary, then click the confirm button, or **Cancel** to leave things as they are. Small changes happen straight away and give you an **Undo** button.
 - **₱ ••••** means amounts are hidden for your role. Ask the Super Admin if you need access.
 - Orders marked **Overdue**, **On hold**, or **No progress** are delayed. Handle those first.
-- **Sending…** next to an order means it's on its way to Bitrix24. **Couldn't send** or **Needs review** means the Operations Head needs to check **Sync**.
+- **Sending…** next to an order means it's on its way to Bitrix24. **Couldn't send** or **Needs review** means the Operations Department Head needs to check **Bitrix24 updates**.
 - This is a prototype. Data is saved in your browser only. To start over, open your avatar menu and click **Reset demo data**.
 - Not sure what a word means? Click the **?** next to the page title.

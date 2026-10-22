@@ -18,7 +18,7 @@ import { SAMPLE_CSV } from "@/data/seed";
 import type { PipelineRun, RejectedRow, RuleKind } from "@/lib/types";
 import { cn, formatDateTime, sleep } from "@/lib/utils";
 import { parseCsv, recordLabel, RULE_LABEL } from "@/lib/validation";
-import { TERM_HELP } from "@/lib/terms";
+import { PAGE_LABEL, TERM_HELP } from "@/lib/terms";
 import { useApp } from "@/store/app-store";
 
 const STAGES = [
@@ -138,7 +138,7 @@ function RunDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenChange
             )}
             <DialogFooter>
               {result && result.rejected > 0 && (
-                <Button variant="outline" onClick={() => { onOpenChange(false); reset(); onDone(); }}>Review rejected rows</Button>
+                <Button variant="outline" onClick={() => { onOpenChange(false); reset(); onDone(); }}>Review records that need fixing</Button>
               )}
               <Button disabled={!result} onClick={() => { onOpenChange(false); reset(); }}>Done</Button>
             </DialogFooter>
@@ -189,7 +189,7 @@ function RejectedTab() {
               const errors = <ul className="text-sm text-destructive">{r.errors.map((e) => <li key={e}>{e}</li>)}</ul>;
               const status = (
                 <Badge variant={r.status === "open" ? "warning" : r.status === "reloaded" ? "success" : "secondary"}>
-                  {r.status === "open" ? "Open" : r.status === "reloaded" ? "Loaded" : "Dismissed"}
+                  {r.status === "open" ? "Open" : r.status === "reloaded" ? "Validated" : "Dismissed"}
                 </Badge>
               );
               return (
@@ -232,11 +232,11 @@ function RejectedTab() {
           initialErrors={fixErrors}
           title={`Fix record ${fixing.rowIndex}`}
           description="Correct the values, then load the record again."
-          submitLabel="Load again"
+          submitLabel="Validate again"
           onSubmit={async (data) => {
-            if (!(await confirmAction({ title: `Load record ${fixing.rowIndex} again?`, description: "The corrected record is checked against your rules again. If it passes, it's saved in Zentra.", confirmLabel: "Load again" }))) return null;
+            if (!(await confirmAction({ title: `Validate record ${fixing.rowIndex} again?`, description: "The corrected record is checked against your rules again. If it passes, it's saved in Zentra.", confirmLabel: "Validate again" }))) return null;
             const r = reloadRejected(fixing.id, data);
-            if (r.ok) { setFixing(null); toast.success("Record loaded", { description: "It passed your rules and was saved." }); }
+            if (r.ok) { setFixing(null); toast.success("Record validated", { description: "It passed your rules and was saved." }); }
             return r;
           }}
         />
@@ -347,7 +347,7 @@ export function PipelinePage() {
   return (
     <>
       <PageHeader
-        title="Data pipeline"
+        title={PAGE_LABEL.fileImports}
         help={TERM_HELP.pipeline}
         description="Files you upload and updates from Bitrix24 are checked against your rules before they're saved. Rows that don't pass are set aside for you to fix."
         actions={<Button onClick={() => setOpen(true)}><Play />Import a file</Button>}
@@ -368,10 +368,10 @@ export function PipelinePage() {
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Import</TableHead>
                   <TableHead>Where it came from</TableHead>
-                  <TableHead className="text-right">Saved</TableHead>
+                  <TableHead className="text-right">Validated</TableHead>
                   <TableHead className="hidden text-right sm:table-cell">Needs fixing</TableHead>
                   <TableHead className="hidden sm:table-cell">Status</TableHead>
-                  <TableHead className="hidden lg:table-cell">Started</TableHead>
+                  <TableHead className="hidden lg:table-cell">Validated date</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

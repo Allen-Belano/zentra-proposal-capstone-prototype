@@ -17,7 +17,7 @@ import { ModuleIcon } from "@/components/app/module-icon";
 import { ZentraLogo, ZentraMark } from "@/components/app/zentra-logo";
 import { can, jobTitleOf, moduleAccess, type Permission } from "@/lib/rbac";
 import { useTheme } from "@/lib/theme";
-import { TERM_HELP } from "@/lib/terms";
+import { PAGE_LABEL, TERM_HELP } from "@/lib/terms";
 import { cn, timeAgo } from "@/lib/utils";
 import { isFor, useApp, useMe } from "@/store/app-store";
 
@@ -46,8 +46,8 @@ function useNav() {
       items: [
         ...(p("activity.view") ? [{ to: "/activity", label: "Order tracking", icon: <Activity /> }] : []),
         ...(me?.role === "dept_head" || me?.role === "employee" ? [{ to: "/performance", label: "Performance", icon: <Gauge /> }] : []),
-        ...(p("pipeline.manage") ? [{ to: "/pipeline", label: "Data pipeline", icon: <Workflow />, count: openRejected, hint: TERM_HELP.pipeline }] : []),
-        ...(p("sync.manage") ? [{ to: "/sync", label: "Sync", icon: <GitMerge />, count: issues }] : []),
+        ...(p("pipeline.manage") ? [{ to: "/pipeline", label: PAGE_LABEL.fileImports, icon: <Workflow />, count: openRejected, hint: TERM_HELP.pipeline }] : []),
+        ...(p("sync.manage") ? [{ to: "/sync", label: PAGE_LABEL.bitrixUpdates, icon: <GitMerge />, count: issues }] : []),
       ],
     },
     {

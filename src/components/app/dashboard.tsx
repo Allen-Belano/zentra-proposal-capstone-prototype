@@ -382,7 +382,7 @@ function CustomizeDialog({ open, onOpenChange, prefs, hasSaved }: { open: boolea
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Customize your Overview</DialogTitle>
-          <DialogDescription>Choose the KPIs and panels to show, their order, and how each chart is drawn.</DialogDescription>
+          <DialogDescription>Choose the key numbers and panels to show, their order, and how each chart is drawn.</DialogDescription>
         </DialogHeader>
         <div className="grid max-h-[60dvh] gap-5 overflow-y-auto pr-1">
           <section className="grid gap-2">

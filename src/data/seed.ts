@@ -50,7 +50,7 @@ export function makeSeed() {
     },
     {
       id: "operations", name: "Operations", recordName: "Order", icon: "truck",
-      description: "Orders from won Bitrix24 deals, from Accounting to Collection.",
+      description: "Orders confirmed in Bitrix24, from Accounting to Collection.",
       kind: "external", source: "Bitrix24", owner: "Operations",
       adapter: {
         type: "api", endpoint: "https://ifixz.bitrix24.com/rest/crm.deal", frequency: "realtime",
@@ -102,7 +102,7 @@ export function makeSeed() {
       steps: [wonAt(4 * D), ["Accounting", "Cleared by Accounting: no unpaid balance", "accounting", 3.8 * D],
         ["Purchasing", "Vendor P.O SPO-3317 issued for the missing items", "purchasing", 3.5 * D, { supplierPo: "SPO-3317" }],
         ["Receiving", "Supplier delivery received; receiving report RR-2210 posted", "inventory", 1 * D, { rr: "RR-2210" }],
-        ["Invoicing", "Sales invoice SI-4471 and written report WR-1182 issued", "invoicing", 6 * H, { si: "SI-4471", wr: "WR-1182" }]] },
+        ["Invoicing", "Sales invoice SI-4471 and sales report WR-1182 issued", "invoicing", 6 * H, { si: "SI-4471", wr: "WR-1182" }]] },
   ];
 
   const toOrder = (o: (typeof orderSpecs)[number], i: number): RecordItem => {
@@ -190,8 +190,8 @@ export function makeSeed() {
   ];
 
   const activity: ActivityEvent[] = [
-    { id: "e1", moduleId: "operations", recordId: "ops-3", title: "Sync conflict on ORD-1038", detail: "Changed in both Zentra and Bitrix24. Waiting for review.", actor: "System", level: "warning", at: ago(42) },
-    { id: "e4", moduleId: "ims", title: "Pipeline run #107 finished", detail: "20 loaded, 2 rejected from receiving_oct20.csv", actor: "Carlo Reyes", level: "warning", at: ago(178) },
+    { id: "e1", moduleId: "operations", recordId: "ops-3", title: "ORD-1038 changed in both systems", detail: "Changed in both Zentra and Bitrix24. Waiting for review.", actor: "System", level: "warning", at: ago(42) },
+    { id: "e4", moduleId: "ims", title: "File import #107 finished", detail: "20 validated, 2 need fixing, from receiving_oct20.csv", actor: "Carlo Reyes", level: "warning", at: ago(178) },
     { id: "e6", moduleId: "ims", recordId: "ims-12", title: "Thermal paste 5g is below reorder level", detail: "4 on hand, reorder at 6", actor: "System", level: "warning", at: ago(300) },
     { id: "e8", moduleId: "operations", title: "Bitrix24 sync completed", detail: "1 order pulled", actor: "Scheduled sync", level: "success", at: ago(60 * 24) },
     { id: "e9", moduleId: "operations", recordId: "ops-1", title: "ORD-1041 received from Bitrix24", detail: "Order confirmed; the order is waiting on Accounting", actor: "Bitrix24", level: "info", at: ago(35) },
@@ -204,7 +204,7 @@ export function makeSeed() {
     note("n2", { position: "purchasing" }, "ORD-1040 is ready for purchasing", "Cleared by Accounting (Jessa Cruz)", "ops-2", 24 * H),
     note("n3", { position: "inventory" }, "ORD-1040 is waiting for a supplier delivery", "Vendor P.O SPO-3320 issued by Mark Dizon", "ops-2", 20 * H),
     note("n4", { position: "delivery" }, "ORD-1038 is ready for delivery", "SI-4471 and WR-1182 issued by Paolo Garcia", "ops-3", 6 * H),
-    note("n5", { role: "dept_head" }, "Sync conflict on ORD-1038", "Changed in both Zentra and Bitrix24", "ops-3", 42),
+    note("n5", { role: "dept_head" }, "ORD-1038 changed in both systems", "Changed in both Zentra and Bitrix24", "ops-3", 42),
   ];
 
   const audit: AuditEntry[] = [

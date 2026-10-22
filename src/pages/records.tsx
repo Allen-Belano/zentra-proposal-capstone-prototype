@@ -86,7 +86,7 @@ export function RecordsPage() {
   }, [allRecords, mod, query, filter, filterField, view, seeMoney]);
 
   const access = moduleAccess(me, moduleId);
-  if (!mod || !mod.active) return <Forbidden message="This system doesn't exist, or it was turned off by a Department Head." />;
+  if (!mod || !mod.active) return <Forbidden message="This system doesn't exist, or it was turned off by the Operations Department Head." />;
   if (access === "none") return <Forbidden />;
   const canEdit = access === "edit";
   const isHead = can(me, "sync.manage");
@@ -188,7 +188,7 @@ export function RecordsPage() {
         {records.length === 0 ? (
           <EmptyState
             title={query || filter !== "all" ? "No matching records" : view === "archived" ? "No archived records" : `No ${mod.recordName.toLowerCase()}s yet`}
-            description={query || filter !== "all" ? "Try a different search or filter." : canEdit && view === "active" ? `Add the first ${mod.recordName.toLowerCase()}, or import a file from the Data pipeline.` : view === "archived" ? "Records you archive will show up here." : undefined}
+            description={query || filter !== "all" ? "Try a different search or filter." : canEdit && view === "active" ? `Add the first ${mod.recordName.toLowerCase()}, or import a file from File imports.` : view === "archived" ? "Records you archive will show up here." : undefined}
             action={canEdit && view === "active" && !query && filter === "all"
               ? <Button onClick={() => setCreating(true)}><Plus />Add {mod.recordName.toLowerCase()}</Button>
               : undefined}

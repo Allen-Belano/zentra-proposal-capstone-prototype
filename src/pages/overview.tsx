@@ -13,7 +13,7 @@ import { LevelDot, Money, PageHeader, StageBadge, StatCard } from "@/components/
 import { MonthPicker } from "@/components/app/month-picker";
 import { delayReason, STAGE_INFO, type OrderStage } from "@/lib/orders";
 import { ROLE_LABEL, can, canViewDailySummary, canViewMonthlyMetrics, moduleAccess, POSITION_LABEL, POSITIONS, titleOf } from "@/lib/rbac";
-import { stageLabel, TERM_HELP } from "@/lib/terms";
+import { PAGE_LABEL, stageLabel, TERM_HELP } from "@/lib/terms";
 import type { RecordItem } from "@/lib/types";
 import { cn, formatDateTime, timeAgo } from "@/lib/utils";
 import { useApp, useMe } from "@/store/app-store";
@@ -306,7 +306,7 @@ function NeedsAttention() {
         </AttentionCard>
         <AttentionCard
           title="Records that need attention" description="Records that failed to send, load, or process" empty="Everything sent and processed" count={technical}
-          action={technical > 0 ? <Button asChild variant="outline" size="sm"><Link to="/sync">Open Sync</Link></Button> : undefined}
+          action={technical > 0 ? <Button asChild variant="outline" size="sm"><Link to="/sync">Open {PAGE_LABEL.bitrixUpdates}</Link></Button> : undefined}
         >
           {a.syncIssues.map((op) => (
             <Link key={op.id} to="/sync" className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-muted">
@@ -398,16 +398,16 @@ function PipelineChart() {
       const dayRuns = runs.filter((r) => PHT_DAY.format(new Date(r.startedAt)) === key);
       return {
         day: PHT_LABEL.format(d),
-        Loaded: dayRuns.reduce((a, r) => a + r.loaded, 0),
-        Rejected: dayRuns.reduce((a, r) => a + r.rejected, 0),
+        Validated: dayRuns.reduce((a, r) => a + r.loaded, 0),
+        "Need fixing": dayRuns.reduce((a, r) => a + r.rejected, 0),
       };
     });
   }, [runs]);
   return (
     <Card className="lg:col-span-2">
       <CardHeader>
-        <CardTitle>Records saved each day</CardTitle>
-        <CardDescription>Rows saved and rows that need fixing over the last 7 days</CardDescription>
+        <CardTitle>Records validated each day</CardTitle>
+        <CardDescription>Rows validated and rows that need fixing over the last 7 days</CardDescription>
       </CardHeader>
       <CardContent className="h-64 pl-1">
         <ResponsiveContainer width="100%" height="100%">
@@ -416,8 +416,8 @@ function PipelineChart() {
             <XAxis dataKey="day" tickLine={false} axisLine={false} fontSize={12} stroke="hsl(var(--muted-foreground))" />
             <YAxis tickLine={false} axisLine={false} fontSize={12} width={32} stroke="hsl(var(--muted-foreground))" allowDecimals={false} />
             <Tooltip cursor={{ fill: "hsl(var(--muted))" }} contentStyle={tooltipStyle} />
-            <Bar dataKey="Loaded" stackId="a" fill="hsl(var(--primary))" radius={[0, 0, 0, 0]} />
-            <Bar dataKey="Rejected" stackId="a" fill="hsl(var(--warning))" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="Validated" stackId="a" fill="hsl(var(--primary))" radius={[0, 0, 0, 0]} />
+            <Bar dataKey="Need fixing" stackId="a" fill="hsl(var(--warning))" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </CardContent>
@@ -611,7 +611,7 @@ export function OverviewPage() {
 
         <TabsContent value="technical" className="grid gap-4">
           <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-            <StatCard label="Records saved" value={total ? `${Math.round((loaded / total) * 100)}%` : "—"} icon={<Workflow />} hint={`${total - loaded} of ${total} rows need fixing this week`} />
+            <StatCard label="Records validated" value={total ? `${Math.round((loaded / total) * 100)}%` : "—"} icon={<Workflow />} hint={`${total - loaded} of ${total} rows need fixing this week`} />
             <StatCard label="Update issues" value={issues} icon={<GitMerge />} tone={issues ? "warning" : "success"} hint="Records that need review, and changes that couldn't be sent" />
             <StatCard label="Records to fix" value={openRejected} icon={<AlertTriangle />} tone={openRejected ? "warning" : "success"} hint="Waiting for you to fix them" />
             <StatCard label="Bitrix24" value={outage ? "Offline" : "Online"} icon={<ShieldOff />} tone={outage ? "danger" : "success"} hint="Connected to Bitrix24" />

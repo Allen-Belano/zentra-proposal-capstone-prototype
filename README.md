@@ -19,8 +19,8 @@ Password for all accounts: `zentra2026`. The sign-in page has one-click buttons 
 
 | Account | Email | Does |
 |---|---|---|
-| Super Admin | superadmin@ifixz.com | Accounts, Department Heads, financial access, audit log |
-| Department Head | depthead@ifixz.com | Business overview, sync and batch processing, pipeline, registry, backups, team roles |
+| Super Admin | superadmin@ifixz.com | Accounts, Operations Department Heads, financial access, audit log |
+| Operations Department Head | depthead@ifixz.com | Business overview, sync and batch processing, pipeline, registry, backups, team roles |
 | Accounting | jessa.accounting@ifixz.com | Order clearing and payments |
 | Purchasing | mark.purchasing@ifixz.com | Vendor P.Os |
 | Inventory | ana.inventory@ifixz.com | Inventory changes and receiving reports |
@@ -35,7 +35,7 @@ New to Zentra? Start with **[docs/QUICK_START.md](docs/QUICK_START.md)**, a one-
 
 **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)** has the full detail:
 
-- how an order moves from the won deal to payment, and which role owns each stage
+- how an order moves from the confirmed order to payment, and which role owns each stage
 - what each role sees and does
 - common tasks: order pages, batch processing, assigning roles, granting financial access
 - who can see and change what
