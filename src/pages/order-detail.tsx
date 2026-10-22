@@ -241,7 +241,7 @@ function NextStep({ rec }: { rec: RecordItem }) {
                 </span>
               </div>
             )}
-            {sla?.late && <p className="mt-1.5 text-sm"><span className="font-medium">Reason:</span> <span className="text-muted-foreground">{reason ?? "None recorded yet."}</span></p>}
+            {sla?.late && <p className="mt-1.5 text-sm"><span className="font-medium">{sla.deliveredAt ? "Late delivery reason:" : "Reason:"}</span> <span className="text-muted-foreground">{reason ?? "None recorded yet."}</span></p>}
           </div>
         </div>
         {mine.length > 0 || canReport ? (
