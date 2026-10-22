@@ -9,7 +9,7 @@ import type { OrderDocs } from "./types";
 
 /** The six stages of an order, in the order they happen. */
 export const STAGE_TRACK = [
-  "Credit check", "Purchasing", "Receiving", "Invoicing", "Delivery", "Payment",
+  "Credit check", "Purchasing", "Receiving", "Invoicing", "Delivery", "Collection",
 ] as const;
 
 /**
@@ -25,8 +25,8 @@ export const STAGE_LABEL: Record<OrderStage, string> = {
   Receiving: "Receiving",
   Invoicing: "Invoicing",
   Delivery: "Delivery",
-  Collection: "Payment",
-  Done: "Completed",
+  Collection: "Collection",
+  Done: "Collection done",
 };
 
 /** The stage a sub-state belongs to, for the progress track. */

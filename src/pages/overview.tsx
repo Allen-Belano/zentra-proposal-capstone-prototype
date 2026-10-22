@@ -219,7 +219,7 @@ function OrderRow({ o, extra, warning }: { o: RecordItem; extra?: React.ReactNod
       <span className="min-w-0 flex-1">
         <span className="block truncate"><span className="font-medium">{o.data.order_no}</span> <span className="text-muted-foreground">{o.data.customer}</span></span>
         <span className="block truncate text-xs text-muted-foreground">
-          {o.data.stage === "Done" ? "Completed" : `${stageLabel(String(o.data.stage))} · waiting on ${owner ? POSITION_LABEL[owner] : "—"}`}
+          {o.data.stage === "Done" ? stageLabel("Done") : `${stageLabel(String(o.data.stage))} · waiting on ${owner ? POSITION_LABEL[owner] : "—"}`}
         </span>
         {warning && <span className="mt-0.5 flex items-center gap-1 text-xs text-warning"><Clock className="h-3 w-3 shrink-0" /><span className="truncate">{warning}</span></span>}
       </span>
