@@ -83,7 +83,7 @@ function Cell({ field, rec }: { field: ModuleField; rec: RecordItem }) {
     );
   }
   if (field.type === "number") return <span className="tabular">{String(v)}</span>;
-  return <span className={cn("block max-w-[8rem] truncate whitespace-nowrap xl:max-w-[12rem]", field.primary && "font-medium")} title={String(v)}>{String(v)}</span>;
+  return <span className={cn("block max-w-[8rem] truncate whitespace-nowrap xl:max-w-[10rem]", field.primary && "font-medium")} title={String(v)}>{String(v)}</span>;
 }
 
 export function RecordsPage() {
