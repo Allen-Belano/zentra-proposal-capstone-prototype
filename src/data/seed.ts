@@ -123,7 +123,7 @@ export function makeSeed() {
       id: `ops-${i + 1}`, moduleId: "operations",
       data: { order_no: o.no, customer: o.customer, client_po: o.clientPo, items: o.items, amount: o.amount, stage: o.stage, payment: o.payment, due_date: daysFromNow(o.due), payment_terms: o.terms },
       order: { docs, log },
-      archived: false, syncState: (i === 1 ? "conflict" : "synced") as RecordItem["syncState"],
+      archived: false, syncState: "synced",
       externalId: `DEAL-${7710 + i}`, syncedVersion: 1,
       createdAt: log[0].at, updatedAt: last.at, updatedBy: last.by,
     };
@@ -142,10 +142,8 @@ export function makeSeed() {
   // The mock Bitrix24 copy of each Operations record.
   const remote: Record<string, RemoteRecord> = {};
   for (const r of records.filter((r) => r.moduleId === "operations")) remote[r.id] = { data: { ...r.data }, version: 1 };
-  // ORD-2 was changed in Bitrix24 while a Zentra edit was pending: the one seeded conflict.
-  remote["ops-2"] = { data: { ...remote["ops-2"].data, items: "5x 24-port PoE network switch", amount: 110000 }, version: 2 };
 
-  /** A deal won in Bitrix24 that hasn't been pulled into Zentra yet. It's incomplete on purpose, so "Update now" shows a record that needs fixing without adding a fourth order. */
+  /** A deal won in Bitrix24 that hasn't been pulled into Zentra yet. Its customer is missing on purpose, so "Update now" rejects it into Rejected records. */
   const remoteInbox: Record<string, string>[] = [
     { order_no: "ORD-4", customer: "", client_po: "CPO-60330", items: "12x Wireless keyboard and mouse set", amount: "21600", stage: "Accounting", payment: "Unpaid", due_date: daysFromNow(7), payment_terms: "30 days" },
   ];
@@ -167,31 +165,16 @@ export function makeSeed() {
     { id: "r14", moduleId: "operations", field: "payment", kind: "oneOf", value: PAYMENT_STATUSES.join("|"), enabled: true },
   ];
 
-  // One import run, with two records that need fixing.
-  const runSpec: [string, string, number, number, number][] = [
-    ["ims", "stock_count_oct21.csv", 10, 2, 20 * H],
-  ];
-  const pipelineRuns: PipelineRun[] = runSpec.map(([moduleId, source, total, rejected, minAgo], i) => ({
-    id: `run-${i + 1}`, number: 101 + i, moduleId, source, total, rejected, loaded: total - rejected,
-    status: rejected ? "completed_with_errors" : "completed",
-    startedAt: ago(minAgo), endedAt: ago(minAgo - 1), runBy: source.startsWith("Bitrix") ? "Scheduled sync" : "Carlo Reyes",
-  }));
-
-  const rejected: RejectedRow[] = [
-    { id: "rej-1", runId: "run-1", moduleId: "ims", rowIndex: 4, errors: ["Item code \"net2003\" doesn't look like the expected format"], raw: { sku: "net2003", name: "Gigabit network card", category: "Networking", on_hand: "20", reorder_level: "8", unit_cost: "1650", location: "Bin B3" }, status: "open", createdAt: ago(20 * H) },
-    { id: "rej-2", runId: "run-1", moduleId: "ims", rowIndex: 8, errors: ["On hand can't be below 0"], raw: { sku: "PWR-5003", name: "Rack-mount PDU", category: "Power", on_hand: "-2", reorder_level: "4", unit_cost: "5400", location: "Shelf E2" }, status: "open", createdAt: ago(20 * H) },
-  ];
+  // No imports yet: "Update now" on Operations runs the first one live and rejects ORD-4.
+  const pipelineRuns: PipelineRun[] = [];
+  const rejected: RejectedRow[] = [];
 
   const syncOps: SyncOperation[] = [
-    { id: "s1", moduleId: "operations", recordId: "ops-2", recordLabel: "ORD-2", direction: "outbound", status: "conflict", attempts: 1, createdAt: ago(42), error: "The order changed in Bitrix24 after Zentra's last sync.", local: { ...records.find((r) => r.id === "ops-2")!.data }, remote: { ...remote["ops-2"].data } },
     { id: "s2", moduleId: "operations", recordId: "ops-3", recordLabel: "ORD-3", direction: "outbound", status: "success", attempts: 1, createdAt: ago(4.3 * D), resolvedAt: ago(4.3 * D) },
     { id: "s3", moduleId: "operations", recordId: "ops-1", recordLabel: "ORD-1", direction: "inbound", status: "success", attempts: 1, createdAt: ago(40), resolvedAt: ago(40) },
   ];
 
   const activity: ActivityEvent[] = [
-    { id: "e1", moduleId: "operations", recordId: "ops-2", title: "ORD-2 changed in both systems", detail: "Changed in both Zentra and Bitrix24. Waiting for review.", actor: "System", level: "warning", at: ago(42) },
-    { id: "e4", moduleId: "ims", title: "File import #101 finished", detail: "8 validated, 2 need fixing, from stock_count_oct21.csv", actor: "Carlo Reyes", level: "warning", at: ago(20 * H) },
-    { id: "e6", moduleId: "ims", recordId: "ims-3", title: "24-port PoE network switch is below reorder level", detail: "3 on hand, reorder at 4", actor: "System", level: "warning", at: ago(300) },
     { id: "e8", moduleId: "operations", title: "Bitrix24 update finished", detail: "1 order pulled", actor: "Scheduled update", level: "success", at: ago(40) },
     { id: "e9", moduleId: "operations", recordId: "ops-1", title: "ORD-1 received from Bitrix24", detail: "Order confirmed; the order is waiting on Accounting", actor: "Bitrix24", level: "info", at: ago(40) },
   ];
@@ -201,7 +184,6 @@ export function makeSeed() {
   const notifications: AppNotification[] = [
     note("n1", { position: "accounting" }, "ORD-1 is ready for Accounting", "New order from Northgate Logistics Inc.", "ops-1", 40),
     note("n2", { position: "purchasing" }, "ORD-2 is ready for purchasing", "Cleared by Accounting (Jessa Cruz)", "ops-2", 6.2 * D),
-    note("n3", { role: "dept_head" }, "ORD-2 changed in both systems", "Changed in both Zentra and Bitrix24", "ops-2", 42),
     note("n4", { position: "accounting" }, "ORD-3 was delivered unpaid", "Collect the payment from Summit Ridge Accounting Firm", "ops-3", 4.3 * D),
     note("n5", { position: "delivery" }, "ORD-3 is past its delivery limit", "1 day past the 3-day limit. No reason recorded yet.", "ops-3", 5.3 * D),
     note("n6", { role: "dept_head" }, "ORD-3 is past its delivery limit", "1 day past the 3-day limit. No reason recorded yet.", "ops-3", 5.3 * D),
@@ -209,7 +191,6 @@ export function makeSeed() {
 
   const audit: AuditEntry[] = [
     { id: "a1", actor: "Jessa Cruz", role: "employee", action: "Signed in", target: "Session", at: ago(5) },
-    { id: "a2", actor: "Carlo Reyes", role: "dept_head", action: "Imported a file", target: "Inventory · stock_count_oct21.csv", at: ago(20 * H) },
     { id: "a3", actor: "Lea Mendoza", role: "employee", action: "Updated order", target: "Operations · ORD-3: delivered", at: ago(4.3 * D) },
     { id: "a4", actor: "Mark Dizon", role: "employee", action: "Updated order", target: "Operations · ORD-2: vendor P.O issued, waiting for supplier", at: ago(6 * D) },
     { id: "a5", actor: "Carlo Reyes", role: "dept_head", action: "Assigned Operations role", target: "Lea Mendoza: Delivery", at: ago(60 * 24 * 12) },
