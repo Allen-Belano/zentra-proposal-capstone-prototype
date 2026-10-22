@@ -334,7 +334,7 @@ function NeedsAttention() {
             </div>
           ))}
         </AttentionCard>
-        <AttentionCard title="Delayed orders" description="Past due, on hold, or stuck at one stage" empty="Every order is on schedule" count={a.delayed.length}>
+        <AttentionCard title="Delayed orders" description="Past the delivery limit, or on hold" empty="Every order is on schedule" count={a.delayed.length}>
           {a.delayed.map(({ o, why }) => <OrderRow key={o.id} o={o} warning={why} />)}
         </AttentionCard>
         <AttentionCard title="Unpaid orders" description="Delivered orders awaiting payment are listed first" empty="Every order is paid" count={a.unpaid.length}>
