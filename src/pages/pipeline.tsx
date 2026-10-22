@@ -18,14 +18,13 @@ import { SAMPLE_CSV } from "@/data/seed";
 import type { PipelineRun, RejectedRow, RuleKind } from "@/lib/types";
 import { cn, formatDateTime, sleep } from "@/lib/utils";
 import { parseCsv, recordLabel, RULE_LABEL } from "@/lib/validation";
+import { TERM_HELP } from "@/lib/terms";
 import { useApp } from "@/store/app-store";
 
 const STAGES = [
-  { key: "ingest", label: "Ingest", desc: "Read rows from the source" },
-  { key: "staging", label: "Staging", desc: "Hold rows apart from live data" },
-  { key: "validate", label: "Validate", desc: "Apply the module's rules" },
-  { key: "transform", label: "Transform", desc: "Map to the standard format" },
-  { key: "load", label: "Load", desc: "Write to the central database" },
+  { key: "ingest", label: "Read the file", desc: "Take the rows out of the file" },
+  { key: "staging", label: "Check the rows", desc: "Set aside rows that don't pass your rules" },
+  { key: "load", label: "Save to Zentra", desc: "Save the rows that passed" },
 ];
 
 function RunStatus({ run }: { run: PipelineRun }) {
@@ -50,13 +49,13 @@ function RunDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenChange
   const start = async () => {
     if (!file) return;
     const parsed = parseCsv(file.text);
-    if (!parsed.length) { toast.error("No rows found", { description: "The file needs a header row and at least one data row." }); return; }
+    if (!parsed.length) { toast.error("No rows found", { description: "The file needs a heading row and at least one row of data." }); return; }
     const target = modules.find((m) => m.id === moduleId);
     if (!(await confirmAction({
-      title: `Run the pipeline on ${file.name}?`,
-      description: "Valid rows are loaded into the central database. Rows that fail validation go to the rejected-records ledger.",
+      title: `Import ${file.name}?`,
+      description: "Rows that pass your rules are saved in Zentra. Rows that fail are set aside for you to fix.",
       details: [["Module", target?.name ?? moduleId], ["Rows", String(parsed.length)]],
-      confirmLabel: "Run pipeline",
+      confirmLabel: "Import file",
     }))) return;
     setRows(parsed.length);
     for (let i = 0; i < STAGES.length; i++) { setStage(i); await sleep(550); }
@@ -69,21 +68,21 @@ function RunDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenChange
     <Dialog open={open} onOpenChange={(o) => { if (!running) { onOpenChange(o); if (!o) reset(); } }}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Run data pipeline</DialogTitle>
-          <DialogDescription>Rows that fail validation go to the rejected records ledger instead of being dropped.</DialogDescription>
+          <DialogTitle>Import a file</DialogTitle>
+          <DialogDescription>Rows that fail your rules are set aside for you to fix, instead of being dropped.</DialogDescription>
         </DialogHeader>
 
         {stage < 0 ? (
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label>Target module</Label>
+              <Label>Where to save the records</Label>
               <Select value={moduleId} onValueChange={(v) => { setModuleId(v); setFile(null); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{modules.map((m) => <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label>Source file</Label>
+              <Label>File to import</Label>
               <input
                 ref={inputRef} type="file" accept=".csv,text/csv" className="hidden"
                 onChange={async (e) => { const f = e.target.files?.[0]; if (f) setFile({ name: f.name, text: await f.text() }); e.target.value = ""; }}
@@ -93,18 +92,18 @@ function RunDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenChange
                 className="flex flex-col items-center gap-1 rounded-2xl border-2 border-dashed px-4 py-6 text-center text-sm transition-colors duration-200 hover:border-primary/40 hover:bg-muted"
               >
                 <FileUp className="h-5 w-5 text-muted-foreground" />
-                {file ? <span className="font-medium">{file.name}</span> : <span>Choose a CSV file</span>}
-                <span className="text-xs text-muted-foreground">Column headers must match the module's field names</span>
+                {file ? <span className="font-medium">{file.name}</span> : <span>Choose a file to import</span>}
+                <span className="text-xs text-muted-foreground">The column headings in the file must match the field names</span>
               </button>
               {SAMPLE_CSV[moduleId] && (
                 <Button variant="link" className="h-auto justify-start p-0 text-sm" onClick={() => setFile({ name: `sample_${moduleId}.csv`, text: SAMPLE_CSV[moduleId] })}>
-                  Use the sample file (includes rows with errors)
+                  Use the sample file (includes rows that need fixing)
                 </Button>
               )}
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-              <Button disabled={!file} onClick={start}><Play />Start run</Button>
+              <Button disabled={!file} onClick={start}><Play />Start import</Button>
             </DialogFooter>
           </div>
         ) : (
@@ -133,8 +132,8 @@ function RunDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenChange
             {result && (
               <div className="grid grid-cols-3 gap-3 rounded-2xl bg-muted p-4 text-center">
                 <div><div className="text-2xl font-semibold tabular">{result.total}</div><div className="text-xs text-muted-foreground">Rows read</div></div>
-                <div><div className="text-2xl font-semibold tabular text-success">{result.loaded}</div><div className="text-xs text-muted-foreground">Loaded</div></div>
-                <div><div className={cn("text-2xl font-semibold tabular", result.rejected && "text-warning")}>{result.rejected}</div><div className="text-xs text-muted-foreground">Rejected</div></div>
+                <div><div className="text-2xl font-semibold tabular text-success">{result.loaded}</div><div className="text-xs text-muted-foreground">Saved</div></div>
+                <div><div className={cn("text-2xl font-semibold tabular", result.rejected && "text-warning")}>{result.rejected}</div><div className="text-xs text-muted-foreground">Needs fixing</div></div>
               </div>
             )}
             <DialogFooter>
@@ -164,21 +163,21 @@ function RejectedTab() {
   return (
     <Card>
       <div className="flex items-center justify-between gap-3 border-b p-4">
-        <p className="text-sm text-muted-foreground">Fix a row and reload it, or dismiss it if it shouldn't be imported.</p>
+        <p className="text-sm text-muted-foreground">Correct a record and load it again, or dismiss it if it shouldn't be imported.</p>
         <Select value={status} onValueChange={(v) => setStatus(v as "open" | "all")}>
           <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
           <SelectContent><SelectItem value="open">Open</SelectItem><SelectItem value="all">All</SelectItem></SelectContent>
         </Select>
       </div>
       {list.length === 0 ? (
-        <EmptyState title="No rejected rows" description="Every row from recent runs passed validation." />
+        <EmptyState title="Nothing to fix" description="Every record from recent imports passed your rules." />
       ) : (
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead>Record</TableHead>
-              <TableHead className="hidden sm:table-cell">Why it was rejected</TableHead>
-              <TableHead className="hidden md:table-cell">Source</TableHead>
+              <TableHead className="hidden sm:table-cell">What needs fixing</TableHead>
+              <TableHead className="hidden md:table-cell">Where it came from</TableHead>
               <TableHead className="hidden sm:table-cell">Status</TableHead>
               <TableHead className="w-10"><span className="sr-only">Actions</span></TableHead>
             </TableRow>
@@ -190,14 +189,14 @@ function RejectedTab() {
               const errors = <ul className="text-sm text-destructive">{r.errors.map((e) => <li key={e}>{e}</li>)}</ul>;
               const status = (
                 <Badge variant={r.status === "open" ? "warning" : r.status === "reloaded" ? "success" : "secondary"}>
-                  {r.status === "open" ? "Open" : r.status === "reloaded" ? "Reloaded" : "Dismissed"}
+                  {r.status === "open" ? "Open" : r.status === "reloaded" ? "Loaded" : "Dismissed"}
                 </Badge>
               );
               return (
                 <TableRow key={r.id}>
                   <TableCell>
                     <div className="font-medium">{recordLabel(m, r.raw) || "(blank)"}</div>
-                    <div className="text-xs text-muted-foreground">{m?.name} · row {r.rowIndex}</div>
+                    <div className="text-xs text-muted-foreground">{m?.name} · record {r.rowIndex}</div>
                     <div className="mt-1.5 grid justify-items-start gap-1.5 sm:hidden">{errors}{status}</div>
                   </TableCell>
                   <TableCell className="hidden max-w-xs sm:table-cell">{errors}</TableCell>
@@ -208,12 +207,13 @@ function RejectedTab() {
                   <TableCell className="hidden sm:table-cell">{status}</TableCell>
                   <TableCell>
                     {r.status === "open" && (
-                      <div className="flex gap-1">
+                      <div className="flex items-center gap-2">
                         <Button size="sm" variant="outline" onClick={() => setFixing(r)}><Wrench />Fix</Button>
-                        <Button size="icon" variant="ghost" aria-label="Dismiss" onClick={async () => {
-                          if (!(await confirmAction({ title: `Dismiss row ${r.rowIndex}?`, description: "It won't be imported. It stays in the ledger marked Dismissed.", confirmLabel: "Dismiss row", destructive: true }))) return;
-                          dismissRejected(r.id); toast("Row dismissed");
-                        }}><X /></Button>
+                        {/* Dismiss sits apart from Fix, and is the smaller target, so it isn't hit by accident. */}
+                        <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-destructive" onClick={async () => {
+                          if (!(await confirmAction({ title: `Dismiss record ${r.rowIndex}?`, description: "It won't be imported. It stays in the list marked Dismissed.", confirmLabel: "Dismiss", destructive: true }))) return;
+                          dismissRejected(r.id); toast("Record dismissed");
+                        }}><X />Dismiss</Button>
                       </div>
                     )}
                   </TableCell>
@@ -230,13 +230,13 @@ function RejectedTab() {
           module={fixMod}
           initial={fixing.raw}
           initialErrors={fixErrors}
-          title={`Fix row ${fixing.rowIndex}`}
-          description="Correct the values, then reload the row through validation."
-          submitLabel="Reload row"
+          title={`Fix record ${fixing.rowIndex}`}
+          description="Correct the values, then load the record again."
+          submitLabel="Load again"
           onSubmit={async (data) => {
-            if (!(await confirmAction({ title: `Reload row ${fixing.rowIndex}?`, description: "The corrected row goes through validation again. If it passes, it's loaded into the central database.", confirmLabel: "Reload row" }))) return null;
+            if (!(await confirmAction({ title: `Load record ${fixing.rowIndex} again?`, description: "The corrected record is checked against your rules again. If it passes, it's saved in Zentra.", confirmLabel: "Load again" }))) return null;
             const r = reloadRejected(fixing.id, data);
-            if (r.ok) { setFixing(null); toast.success("Row reloaded", { description: "It passed validation and was loaded." }); }
+            if (r.ok) { setFixing(null); toast.success("Record loaded", { description: "It passed your rules and was saved." }); }
             return r;
           }}
         />
@@ -262,8 +262,8 @@ function RulesTab() {
     <Card>
       <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col gap-1">
-          <CardTitle>Validation rules</CardTitle>
-          <CardDescription>Applied to imports, Bitrix24 syncs, and form entries.</CardDescription>
+          <CardTitle>Rules for checking records</CardTitle>
+          <CardDescription>Applied to files you import, updates from Bitrix24, and records you type in.</CardDescription>
         </div>
         <Select value={mod.id} onValueChange={(v) => { setModuleId(v); setField(""); }}>
           <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
@@ -272,16 +272,17 @@ function RulesTab() {
       </CardHeader>
       <CardContent className="grid grid-cols-1 gap-4">
         <div className="divide-y divide-border/70 rounded-2xl bg-muted">
-          {list.length === 0 && <EmptyState title="No rules yet" description="Add a rule below. Without rules, every row is accepted." />}
+          {list.length === 0 && <EmptyState title="No rules yet" description="Add a rule below. Without rules, every record is accepted." />}
           {list.map((r) => (
             <div key={r.id} className="flex items-center gap-3 px-4 py-3">
-              <Switch checked={r.enabled} onCheckedChange={async () => {
+              <Switch checked={r.enabled} onCheckedChange={() => {
                 const name = mod.fields.find((f) => f.key === r.field)?.label ?? r.field;
-                if (!(await confirmAction(r.enabled
-                  ? { title: `Turn off this rule for ${name}?`, description: "New imports, syncs, and form entries won't be checked against it.", confirmLabel: "Turn off", destructive: true }
-                  : { title: `Turn on this rule for ${name}?`, description: "New imports, syncs, and form entries will be checked against it.", confirmLabel: "Turn on" }))) return;
                 toggleRule(r.id);
-              }} aria-label="Enable rule" />
+                toast.success(r.enabled ? `Rule turned off for ${name}` : `Rule turned on for ${name}`, {
+                  description: "New imports, updates from Bitrix24, and records you type in are affected.",
+                  action: { label: "Undo", onClick: () => toggleRule(r.id) },
+                });
+              }} aria-label={`Turn the rule for ${mod.fields.find((f) => f.key === r.field)?.label ?? r.field} on or off`} />
               <div className={cn("min-w-0 flex-1", !r.enabled && "opacity-50")}>
                 <div className="text-sm font-medium">{mod.fields.find((f) => f.key === r.field)?.label ?? r.field}</div>
                 <div className="truncate text-xs text-muted-foreground">
@@ -299,7 +300,7 @@ function RulesTab() {
           <div className="grid gap-2">
             <Label>Field</Label>
             <Select value={field} onValueChange={setField}>
-              <SelectTrigger><SelectValue placeholder="Choose field" /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Choose a field" /></SelectTrigger>
               <SelectContent>{mod.fields.map((f) => <SelectItem key={f.key} value={f.key}>{f.label}</SelectItem>)}</SelectContent>
             </Select>
           </div>
@@ -314,15 +315,15 @@ function RulesTab() {
             <Label>Value</Label>
             <Input
               disabled={!needsValue} value={value} onChange={(e) => setValue(e.target.value)}
-              placeholder={kind === "min" ? "0" : kind === "pattern" ? "^[A-Z]{3}-\\d{4}$" : kind === "oneOf" ? "A|B|C" : "Not needed"}
+              placeholder={kind === "min" ? "0" : kind === "pattern" ? "ABC-1234" : kind === "oneOf" ? "A, B, C" : "Not needed"}
             />
           </div>
           <Button
             disabled={!field || (needsValue && !value)}
             onClick={async () => {
               if (!(await confirmAction({
-                title: "Add this validation rule?",
-                description: "New imports, syncs, and form entries will be checked against it. Existing records aren't changed.",
+                title: "Add this rule?",
+                description: "New imports, updates from Bitrix24, and records you type in will be checked against it. Existing records aren't changed.",
                 details: [["Field", mod.fields.find((f) => f.key === field)?.label ?? field], ["Rule", RULE_LABEL[kind]], ...(needsValue ? [["Value", value] as [string, string]] : [])],
                 confirmLabel: "Add rule",
               }))) return;
@@ -347,27 +348,28 @@ export function PipelinePage() {
     <>
       <PageHeader
         title="Data pipeline"
-        description="Imports and Bitrix24 syncs go through ingest, staging, validation, transformation, and load before reaching the central database."
-        actions={<Button onClick={() => setOpen(true)}><Play />Run pipeline</Button>}
+        help={TERM_HELP.pipeline}
+        description="Files you upload and updates from Bitrix24 are checked against your rules before they're saved. Rows that don't pass are set aside for you to fix."
+        actions={<Button onClick={() => setOpen(true)}><Play />Import a file</Button>}
       />
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="runs">Runs</TabsTrigger>
+          <TabsTrigger value="runs">Imports</TabsTrigger>
           <TabsTrigger value="rejected">
-            <span>Rejected<span className="hidden sm:inline"> records</span></span>
+            <span>Needs fixing<span className="hidden sm:inline"> records</span></span>
             {openRejected > 0 && <span className="rounded-full bg-warning/15 px-1.5 text-xs tabular text-warning">{openRejected}</span>}
           </TabsTrigger>
-          <TabsTrigger value="rules"><span className="sm:hidden">Rules</span><span className="hidden sm:inline">Validation rules</span></TabsTrigger>
+          <TabsTrigger value="rules"><span className="sm:hidden">Rules</span><span className="hidden sm:inline">Rules for checking records</span></TabsTrigger>
         </TabsList>
         <TabsContent value="runs">
           <Card>
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead>Run</TableHead>
-                  <TableHead>Source</TableHead>
-                  <TableHead className="text-right">Loaded</TableHead>
-                  <TableHead className="hidden text-right sm:table-cell">Rejected</TableHead>
+                  <TableHead>Import</TableHead>
+                  <TableHead>Where it came from</TableHead>
+                  <TableHead className="text-right">Saved</TableHead>
+                  <TableHead className="hidden text-right sm:table-cell">Needs fixing</TableHead>
                   <TableHead className="hidden sm:table-cell">Status</TableHead>
                   <TableHead className="hidden md:table-cell">Started</TableHead>
                 </TableRow>
@@ -385,7 +387,7 @@ export function PipelinePage() {
                     </TableCell>
                     <TableCell className="text-right tabular">
                       {r.loaded}
-                      {r.rejected > 0 && <div className="whitespace-nowrap text-xs text-warning sm:hidden">{r.rejected} rejected</div>}
+                      {r.rejected > 0 && <div className="whitespace-nowrap text-xs text-warning sm:hidden">{r.rejected} need fixing</div>}
                     </TableCell>
                     <TableCell className={cn("hidden text-right tabular sm:table-cell", r.rejected > 0 && "text-warning")}>{r.rejected}</TableCell>
                     <TableCell className="hidden sm:table-cell"><RunStatus run={r} /></TableCell>

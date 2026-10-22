@@ -39,7 +39,7 @@ export function makeSeed() {
       kind: "native", owner: "Operations · Inventory", adapter: { type: "native", frequency: "realtime" }, active: true, baseline: true,
       registeredAt: ago(60 * 24 * 30), registeredBy: "Carlo Reyes",
       fields: [
-        { key: "sku", label: "SKU", type: "text" },
+        { key: "sku", label: "Item code", type: "text" },
         { key: "name", label: "Item name", type: "text", primary: true },
         { key: "category", label: "Category", type: "select", options: ["Displays", "Batteries", "Components", "Accessories", "Consumables"], hideOnMobile: true },
         { key: "on_hand", label: "On hand", type: "number" },
@@ -89,7 +89,7 @@ export function makeSeed() {
     ["CON-5003", "Thermal paste 5g", "Consumables", 4, 6, 120, "Shelf E1"],
   ];
 
-  const wonAt = (minutesAgo: number): Step => ["Credit check", "Deal won in Bitrix24; order created in Zentra", "bitrix", minutesAgo];
+  const wonAt = (minutesAgo: number): Step => ["Credit check", "Order confirmed in Bitrix24; order created in Zentra", "bitrix", minutesAgo];
   const orderSpecs: { no: string; customer: string; clientPo: string; items: string; amount: number; stage: OrderStage; payment: "Paid" | "Unpaid"; due: number; steps: Step[] }[] = [
     { no: "ORD-1041", customer: "Lumen Mobile Hub", clientPo: "CPO-55821", items: "40x Battery pack 3240mAh", amount: 31200, stage: "Credit check", payment: "Unpaid", due: 4,
       steps: [wonAt(35)] },
@@ -97,7 +97,7 @@ export function makeSeed() {
       steps: [wonAt(26 * H), ["Credit check", "Credit check cleared: no unpaid balance", "accounting", 20 * H]] },
     { no: "ORD-1039", customer: "TechNest Marikina", clientPo: "CPO-55744", items: "60x Tempered glass 6.1in", amount: 2700, stage: "Invoicing", payment: "Paid", due: 2,
       steps: [wonAt(2 * D), ["Credit check", "Credit check cleared: no unpaid balance", "accounting", 46 * H],
-        ["Purchasing", "Payment received early (OR OR-8812)", "accounting", 40 * H, { payment: "OR-8812" }],
+        ["Purchasing", "Payment received early (OR-8812)", "accounting", 40 * H, { payment: "OR-8812" }],
         ["Purchasing", "All items reserved from stock", "purchasing", 30 * H]] },
     { no: "ORD-1038", customer: "Gadget Clinic Pasig", clientPo: "CPO-55702", items: "10x Rear camera module 12MP", amount: 16500, stage: "Delivery", payment: "Unpaid", due: 1,
       steps: [wonAt(4 * D), ["Credit check", "Credit check cleared: no unpaid balance", "accounting", 3.8 * D],
@@ -119,10 +119,10 @@ export function makeSeed() {
         ["Purchasing", "All items reserved from stock", "purchasing", 9 * D],
         ["Invoicing", "Sales invoice SI-4452 and written report WR-1166 issued", "invoicing", 6 * D, { si: "SI-4452", wr: "WR-1166" }],
         ["Delivery", "Items delivered; delivery receipt DR-7705 signed by the client", "delivery", 1 * D, { dr: "DR-7705" }],
-        ["Collection", "Payment collected (OR OR-8820); order closed", "accounting", 2 * H, { payment: "OR-8820" }]] },
+        ["Collection", "Payment collected (OR-8820); order closed", "accounting", 2 * H, { payment: "OR-8820" }]] },
     { no: "ORD-1034", customer: "FixPoint Angono", clientPo: "CPO-55598", items: "12x Battery pack 4325mAh", amount: 11040, stage: "Done", payment: "Paid", due: -5,
       steps: [wonAt(12 * D), ["Credit check", "Credit check cleared: no unpaid balance", "accounting", 11.9 * D],
-        ["Purchasing", "Payment received early (OR OR-8790)", "accounting", 11.5 * D, { payment: "OR-8790" }],
+        ["Purchasing", "Payment received early (OR-8790)", "accounting", 11.5 * D, { payment: "OR-8790" }],
         ["Purchasing", "All items reserved from stock", "purchasing", 11 * D],
         ["Invoicing", "Sales invoice SI-4440 and written report WR-1158 issued", "invoicing", 8 * D, { si: "SI-4440", wr: "WR-1158" }],
         ["Delivery", "Items delivered; delivery receipt DR-7698 signed by the client", "delivery", 6 * D, { dr: "DR-7698" }]] },
@@ -139,13 +139,13 @@ export function makeSeed() {
         ["Purchasing", "All items reserved from stock", "purchasing", 31 * D],
         ["Invoicing", "Sales invoice SI-4398 and written report WR-1121 issued", "invoicing", 29 * D, { si: "SI-4398", wr: "WR-1121" }],
         ["Delivery", "Items delivered; delivery receipt DR-7650 signed by the client", "delivery", 27 * D, { dr: "DR-7650" }],
-        ["Collection", "Payment collected (OR OR-8701); order closed", "accounting", 25 * D, { payment: "OR-8701" }]] },
+        ["Collection", "Payment collected (OR-8701); order closed", "accounting", 25 * D, { payment: "OR-8701" }]] },
     { no: "ORD-1025", customer: "CellCare Cainta", clientPo: "CPO-55360", items: "40x Tempered glass 6.1in", amount: 1800, stage: "Done", payment: "Paid", due: -30,
       steps: [wonAt(36 * D), ["Credit check", "Credit check cleared: no unpaid balance", "accounting", 35.9 * D],
         ["Purchasing", "All items reserved from stock", "purchasing", 35 * D],
         ["Invoicing", "Sales invoice SI-4380 and written report WR-1109 issued", "invoicing", 34 * D, { si: "SI-4380", wr: "WR-1109" }],
         ["Delivery", "Items delivered; delivery receipt DR-7631 signed by the client", "delivery", 31 * D, { dr: "DR-7631" }],
-        ["Collection", "Payment collected (OR OR-8688); order closed", "accounting", 29 * D, { payment: "OR-8688" }]] },
+        ["Collection", "Payment collected (OR-8688); order closed", "accounting", 29 * D, { payment: "OR-8688" }]] },
   ];
 
   const toOrder = (o: (typeof orderSpecs)[number], i: number): RecordItem => {
@@ -223,7 +223,7 @@ export function makeSeed() {
   }));
 
   const rejected: RejectedRow[] = [
-    { id: "rej-1", runId: "run-7", moduleId: "ims", rowIndex: 7, errors: ["SKU \"bat2003\" doesn't match the expected format"], raw: { sku: "bat2003", name: "Battery pack 5000mAh", category: "Batteries", on_hand: "30", reorder_level: "10", unit_cost: "1050", location: "Rack B2" }, status: "open", createdAt: ago(60 * 3) },
+    { id: "rej-1", runId: "run-7", moduleId: "ims", rowIndex: 7, errors: ["Item code \"bat2003\" doesn't look like the expected format"], raw: { sku: "bat2003", name: "Battery pack 5000mAh", category: "Batteries", on_hand: "30", reorder_level: "10", unit_cost: "1050", location: "Rack B2" }, status: "open", createdAt: ago(60 * 3) },
     { id: "rej-2", runId: "run-7", moduleId: "ims", rowIndex: 15, errors: ["On hand can't be below 0"], raw: { sku: "CMP-3011", name: "Vibration motor", category: "Components", on_hand: "-4", reorder_level: "10", unit_cost: "95", location: "Bin C6" }, status: "open", createdAt: ago(60 * 3) },
     { id: "rej-3", runId: "run-4", moduleId: "operations", rowIndex: 3, errors: ["Customer is required"], raw: { order_no: "ORD-1029", customer: "", client_po: "CPO-55470", items: "4x 20W USB-C charger", amount: "1560", stage: "Credit check", payment: "Unpaid", due_date: daysFromNow(-6) }, status: "dismissed", createdAt: ago(60 * 24 * 3) },
   ];
@@ -237,15 +237,15 @@ export function makeSeed() {
 
   const activity: ActivityEvent[] = [
     { id: "e1", moduleId: "operations", recordId: "ops-3", title: "Sync conflict on ORD-1039", detail: "Changed in both Zentra and Bitrix24. Waiting for review.", actor: "System", level: "warning", at: ago(42) },
-    { id: "e3", moduleId: "operations", recordId: "ops-5", title: "Write-back failed for ORD-1037", detail: "Bitrix24 didn't respond after 3 attempts.", actor: "System", level: "error", at: ago(95) },
+    { id: "e3", moduleId: "operations", recordId: "ops-5", title: "Couldn't send ORD-1037 to Bitrix24", detail: "Bitrix24 didn't respond after 3 attempts.", actor: "System", level: "error", at: ago(95) },
     { id: "e4", moduleId: "ims", title: "Pipeline run #107 finished", detail: "20 loaded, 2 rejected from receiving_oct20.csv", actor: "Carlo Reyes", level: "warning", at: ago(178) },
     { id: "e6", moduleId: "ims", recordId: "ims-12", title: "Thermal paste 5g is below reorder level", detail: "4 on hand, reorder at 6", actor: "System", level: "warning", at: ago(300) },
     { id: "e8", moduleId: "operations", title: "Bitrix24 sync completed", detail: "9 orders pulled", actor: "Scheduled sync", level: "success", at: ago(60 * 24) },
-    { id: "e9", moduleId: "operations", recordId: "ops-1", title: "ORD-1041 received from Bitrix24", detail: "Deal won; the order is waiting for its credit check", actor: "Bitrix24", level: "info", at: ago(35) },
+    { id: "e9", moduleId: "operations", recordId: "ops-1", title: "ORD-1041 received from Bitrix24", detail: "Order confirmed; the order is waiting for its credit check", actor: "Bitrix24", level: "info", at: ago(35) },
   ];
 
-  const note = (id: string, to: AppNotification["to"], title: string, detail: string, orderId: string | undefined, min: number): AppNotification =>
-    ({ id, to, title, detail, orderId, at: ago(min), readBy: [] });
+  const note = (id: string, to: AppNotification["to"], title: string, detail: string, recordId: string | undefined, min: number): AppNotification =>
+    ({ id, to, title, detail, recordId, moduleId: "operations", at: ago(min), readBy: [] });
   const notifications: AppNotification[] = [
     note("n1", { position: "accounting" }, "ORD-1041 needs a credit check", "New order from Lumen Mobile Hub", "ops-1", 35),
     note("n2", { position: "purchasing" }, "ORD-1040 is ready for purchasing", "Credit check cleared by Jessa Cruz", "ops-2", 20 * H),
@@ -254,14 +254,14 @@ export function makeSeed() {
     note("n5", { position: "accounting" }, "ORD-1036 was delivered unpaid", "Collect the payment from CellCare Cainta", "ops-6", 3 * H),
     note("n6", { position: "inventory" }, "ORD-1031 is waiting for a supplier delivery", "Supplier PO SPO-3320 issued by Mark Dizon", "ops-11", 2 * D),
     note("n7", { role: "dept_head" }, "ORD-1033 is on hold", "GadgetWorks Cainta has an unpaid balance", "ops-9", 1.5 * D),
-    note("n8", { role: "dept_head" }, "Write-back failed for ORD-1037", "Bitrix24 didn't respond after 3 attempts", "ops-5", 95),
+    note("n8", { role: "dept_head" }, "Couldn't send ORD-1037 to Bitrix24", "Bitrix24 didn't respond after 3 attempts", "ops-5", 95),
     note("n9", { role: "dept_head" }, "Sync conflict on ORD-1039", "Changed in both Zentra and Bitrix24", "ops-3", 42),
   ];
 
   const audit: AuditEntry[] = [
     { id: "a1", actor: "Jessa Cruz", role: "employee", action: "Signed in", target: "Session", at: ago(5) },
     { id: "a7", actor: "Lea Mendoza", role: "employee", action: "Updated order", target: "Operations · ORD-1036: delivered", at: ago(3 * H) },
-    { id: "a2", actor: "Carlo Reyes", role: "dept_head", action: "Ran ETL pipeline", target: "Inventory · receiving_oct20.csv", at: ago(180) },
+    { id: "a2", actor: "Carlo Reyes", role: "dept_head", action: "Imported a file", target: "Inventory · receiving_oct20.csv", at: ago(180) },
     { id: "a3", actor: "Paolo Garcia", role: "employee", action: "Updated order", target: "Operations · ORD-1038: SI and WR issued", at: ago(6 * H) },
     { id: "a5", actor: "Carlo Reyes", role: "dept_head", action: "Assigned Operations role", target: "Lea Mendoza: Delivery", at: ago(60 * 24 * 3) },
     { id: "a6", actor: "Carlo Reyes", role: "dept_head", action: "Created backup", target: "Manual restore point", at: ago(60 * 24 * 4) },

@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LevelDot, Money, PageHeader, StageBadge, StatCard } from "@/components/app/bits";
 import { delayReason, STAGE_INFO, type OrderStage } from "@/lib/orders";
 import { ROLE_LABEL, can, canViewDailySummary, canViewMonthlyMetrics, moduleAccess, POSITION_LABEL, POSITIONS, titleOf } from "@/lib/rbac";
+import { stageLabel, TERM_HELP } from "@/lib/terms";
 import type { RecordItem } from "@/lib/types";
 import { cn, formatDateTime, timeAgo } from "@/lib/utils";
 import { useApp, useMe } from "@/store/app-store";
@@ -106,16 +107,16 @@ function DailySummaryCard({ className }: { className?: string }) {
       <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-1">
           <CardTitle>Daily process summary</CardTitle>
-          <CardDescription>Steps completed and orders handled on {label}</CardDescription>
+          <CardDescription>Stages completed and orders handled on {label}</CardDescription>
         </div>
         <div className="flex items-center gap-2">
           {day !== today && <Button variant="ghost" size="sm" onClick={() => setDay(today)}>Today</Button>}
-          <Input type="date" value={day} max={today} onChange={(e) => e.target.value && setDay(e.target.value)} className="h-9 w-40" aria-label="Summary date" />
+          <Input type="date" value={day} max={today} onChange={(e) => e.target.value && setDay(e.target.value)} className="h-10 w-40" aria-label="Summary date" />
         </div>
       </CardHeader>
       <CardContent className="grid gap-4">
         <div className="flex flex-wrap gap-2 text-xs">
-          <span className="rounded-full bg-primary px-3 py-1 font-medium text-primary-foreground">{processes.length} step{processes.length === 1 ? "" : "s"} completed</span>
+          <span className="rounded-full bg-primary px-3 py-1 font-medium text-primary-foreground">{processes.length} stage{processes.length === 1 ? "" : "s"} completed</span>
           {byRole.map((r) => <span key={r.label} className="rounded-full bg-muted px-3 py-1"><span className="font-medium">{r.n}</span> {r.label}</span>)}
         </div>
         <div className="grid gap-3 md:grid-cols-2">
@@ -178,7 +179,7 @@ function MonthlyMetricsCard({ className }: { className?: string }) {
     { label: "Orders received", value: cur.received, hint: delta(cur.received, prev.received) },
     { label: "Orders completed", value: cur.completed, hint: delta(cur.completed, prev.completed) },
     { label: "On-time deliveries", value: cur.onTimePct === null ? "—" : `${cur.onTimePct}%`, hint: `${cur.delivered} delivered this month` },
-    { label: "Average time to complete", value: cur.avgDays === null ? "—" : `${cur.avgDays.toFixed(1)} days`, hint: "From won deal to payment" },
+    { label: "Average time to complete", value: cur.avgDays === null ? "—" : `${cur.avgDays.toFixed(1)} days`, hint: "From order confirmed to payment" },
     { label: "Invoiced sales", value: <Money value={cur.invoiced} />, hint: "Sales invoices issued" },
     { label: "Payments collected", value: <Money value={cur.collected} />, hint: "Official receipts issued" },
     { label: "Low-stock items", value: lowStock.length, hint: "At or below reorder level now" },
@@ -191,7 +192,7 @@ function MonthlyMetricsCard({ className }: { className?: string }) {
           <CardDescription>Shared business and operations numbers for {MONTH.format(new Date(`${month}-01T00:00:00Z`))}</CardDescription>
         </div>
         <Select value={month} onValueChange={setMonth}>
-          <SelectTrigger className="h-9 w-44" aria-label="Month"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="h-10 w-44" aria-label="Month"><SelectValue /></SelectTrigger>
           <SelectContent>{months.map((m) => <SelectItem key={m} value={m}>{MONTH.format(new Date(`${m}-01T00:00:00Z`))}</SelectItem>)}</SelectContent>
         </Select>
       </CardHeader>
@@ -218,7 +219,7 @@ function OrderRow({ o, extra, warning }: { o: RecordItem; extra?: React.ReactNod
       <span className="min-w-0 flex-1">
         <span className="block truncate"><span className="font-medium">{o.data.order_no}</span> <span className="text-muted-foreground">{o.data.customer}</span></span>
         <span className="block truncate text-xs text-muted-foreground">
-          {o.data.stage === "Done" ? "Completed" : `${o.data.stage} · waiting on ${owner ? POSITION_LABEL[owner] : "—"}`}
+          {o.data.stage === "Done" ? "Completed" : `${stageLabel(String(o.data.stage))} · waiting on ${owner ? POSITION_LABEL[owner] : "—"}`}
         </span>
         {warning && <span className="mt-0.5 flex items-center gap-1 text-xs text-warning"><Clock className="h-3 w-3 shrink-0" /><span className="truncate">{warning}</span></span>}
       </span>
@@ -280,7 +281,7 @@ function NeedsAttention() {
       <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard label="Delayed orders" value={a.delayed.length} icon={<Clock />} tone={a.delayed.length ? "warning" : "success"} hint={`${a.active.length - a.delayed.length} of ${a.active.length} on track`} />
         <StatCard label="Unpaid orders" value={a.unpaid.length} icon={<Wallet />} tone={receivable.length ? "warning" : "default"} hint={<>{receivable.length} delivered, awaiting payment</>} />
-        <StatCard label="Sync and batch issues" value={technical} icon={<GitMerge />} tone={technical ? "danger" : "success"} hint="Conflicts, failures, rejected rows" />
+        <StatCard label="Records that need attention" value={technical} icon={<GitMerge />} tone={technical ? "warning" : "success"} hint="Need review, and changes that couldn't be sent" />
         <StatCard label="Low-stock items" value={a.lowStock.length} icon={<PackageX />} tone={a.lowStock.length ? "warning" : "success"} hint="At or below reorder level" />
       </div>
       <div className="stagger grid gap-4 lg:grid-cols-2">
@@ -298,33 +299,33 @@ function NeedsAttention() {
             </div>
           ))}
         </AttentionCard>
-        <AttentionCard title="Delayed orders" description="Past due, on hold, or stuck in one step" empty="Every order is on schedule" count={a.delayed.length}>
+        <AttentionCard title="Delayed orders" description="Past due, on hold, or stuck at one stage" empty="Every order is on schedule" count={a.delayed.length}>
           {a.delayed.map(({ o, why }) => <OrderRow key={o.id} o={o} warning={why} />)}
         </AttentionCard>
-        <AttentionCard title="Unpaid transactions" description="Delivered orders awaiting payment are listed first" empty="Every order is paid" count={a.unpaid.length}>
+        <AttentionCard title="Unpaid orders" description="Delivered orders awaiting payment are listed first" empty="Every order is paid" count={a.unpaid.length}>
           {a.unpaid.map((o) => (
             <OrderRow key={o.id} o={o} extra={<>{o.data.stage === "Collection" && <Badge variant="warning">Delivered</Badge>}<Money value={o.data.amount} className="text-xs" /></>} />
           ))}
         </AttentionCard>
         <AttentionCard
-          title="Sync and batch issues" description="Records that failed to sync, load, or process" empty="Everything synced and processed" count={technical}
-          action={technical > 0 ? <Button asChild variant="outline" size="sm"><Link to="/sync">Open Sync center</Link></Button> : undefined}
+          title="Records that need attention" description="Records that failed to send, load, or process" empty="Everything sent and processed" count={technical}
+          action={technical > 0 ? <Button asChild variant="outline" size="sm"><Link to="/sync">Open Sync</Link></Button> : undefined}
         >
           {a.syncIssues.map((op) => (
             <Link key={op.id} to="/sync" className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-muted">
-              <span><span className="font-medium">{op.recordLabel}</span> <span className="text-muted-foreground">{op.status === "conflict" ? "changed in both systems" : "write-back failed"}</span></span>
-              <Badge variant={op.status === "conflict" ? "warning" : "destructive"}>{op.status === "conflict" ? "Conflict" : "Failed"}</Badge>
+              <span><span className="font-medium">{op.recordLabel}</span> <span className="text-muted-foreground">{op.status === "conflict" ? "changed in both systems" : "couldn't be sent"}</span></span>
+              <Badge variant={op.status === "conflict" ? "warning" : "destructive"}>{op.status === "conflict" ? "Needs review" : "Failed"}</Badge>
             </Link>
           ))}
           {a.openRejected.map((r) => (
             <Link key={r.id} to="/pipeline" className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-muted">
-              <span className="min-w-0"><span className="font-medium">Rejected row {r.rowIndex}</span> <span className="block truncate text-xs text-muted-foreground">{r.errors[0]}</span></span>
-              <Badge variant="warning">Rejected</Badge>
+              <span className="min-w-0"><span className="font-medium">Record to fix {r.rowIndex}</span> <span className="block truncate text-xs text-muted-foreground">{r.errors[0]}</span></span>
+              <Badge variant="warning">Needs fixing</Badge>
             </Link>
           ))}
           {a.batchIssues.map((x, i) => (
             <Link key={`${x.label}-${i}`} to="/sync" className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-muted">
-              <span className="min-w-0"><span className="font-medium">{x.label}</span> <span className="block truncate text-xs text-muted-foreground">Last batch: {x.message}</span></span>
+              <span className="min-w-0"><span className="font-medium">{x.label}</span> <span className="block truncate text-xs text-muted-foreground">Last run: {x.message}</span></span>
               <Badge variant={x.result === "failed" ? "destructive" : "warning"}>{x.result === "failed" ? "Failed" : "Needs action"}</Badge>
             </Link>
           ))}
@@ -350,7 +351,7 @@ function MyKpis({ className }: { className?: string }) {
   return (
     <div className={cn("grid gap-2", className)}>
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-medium text-muted-foreground">My KPIs this month</h2>
+        <h2 className="text-sm font-medium text-muted-foreground">My performance this month</h2>
         <Link to="/performance" className="text-sm text-primary hover:underline">Details</Link>
       </div>
       <KpiCard k={mine} prevName={prevName} />
@@ -369,7 +370,7 @@ function WaitingOnYou({ className }: { className?: string }) {
           Waiting on you
           {mine.length > 0 && <span className="rounded-full bg-primary px-2 py-0.5 text-xs tabular text-primary-foreground">{mine.length}</span>}
         </CardTitle>
-        <CardDescription>Orders at a step your role ({me.position ? POSITION_LABEL[me.position] : "unassigned"}) completes</CardDescription>
+        <CardDescription>Orders at the stage your role ({me.position ? POSITION_LABEL[me.position] : "unassigned"}) completes</CardDescription>
       </CardHeader>
       <CardContent>
         {mine.length === 0 ? (
@@ -408,8 +409,8 @@ function PipelineChart() {
   return (
     <Card className="lg:col-span-2">
       <CardHeader>
-        <CardTitle>Pipeline throughput</CardTitle>
-        <CardDescription>Rows loaded and rejected over the last 7 days</CardDescription>
+        <CardTitle>Records saved each day</CardTitle>
+        <CardDescription>Rows saved and rows that need fixing over the last 7 days</CardDescription>
       </CardHeader>
       <CardContent className="h-64 pl-1">
         <ResponsiveContainer width="100%" height="100%">
@@ -437,7 +438,7 @@ function RecentActivity({ className }: { className?: string }) {
       <CardHeader className="flex-row items-center justify-between">
         <div className="flex flex-col gap-1">
           <CardTitle>System activity</CardTitle>
-          <CardDescription>Syncs, pipeline runs, and alerts</CardDescription>
+          <CardDescription>Updates, file imports, and alerts</CardDescription>
         </div>
         </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -464,8 +465,8 @@ function ModuleHealth() {
   return (
     <Card className="lg:col-span-3">
       <CardHeader>
-        <CardTitle>Module health</CardTitle>
-        <CardDescription>Connection and last sync for each active module</CardDescription>
+        <CardTitle>System health</CardTitle>
+        <CardDescription>Connection and last update for each active module</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {modules.map((m) => {
@@ -502,8 +503,8 @@ function AdminOverview() {
       <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard label="Active accounts" value={active.length} icon={<UserCheck />} hint={`${users.length} total`} />
         <StatCard label="Disabled accounts" value={users.length - active.length} icon={<ShieldOff />} hint="Can't sign in" />
-        <StatCard label="Sign-ins today" value={signIns} icon={<Clock />} hint="Last 24 hours" />
-        <StatCard label="Audit events today" value={events} icon={<Workflow />} hint="Last 24 hours" />
+        <StatCard label="Sign-ins in the last 24 hours" value={signIns} icon={<Clock />} hint="Last 24 hours" />
+        <StatCard label="Changes in the last 24 hours" value={events} icon={<Workflow />} hint="Last 24 hours" />
       </div>
       <div className="stagger mt-4 grid gap-4 lg:grid-cols-3">
         <Card>
@@ -546,13 +547,13 @@ export function OverviewPage() {
   const rejected = useApp((s) => s.rejected);
   const outage = useApp((s) => s.outage);
   const attention = useAttention();
-  // Headings name the role, not the person: the same screen reads the same for whoever holds it.
+  // Headings name the scope the person owns, so the same screen reads the same for whoever holds it.
   const role = titleOf(me);
 
   if (me.role === "super_admin") {
     return (
       <>
-        <PageHeader title={role} description="Account status and recent activity across Zentra." />
+        <PageHeader title={role} description="Accounts, roles, and recent activity across Zentra." />
         <AdminOverview />
       </>
     );
@@ -566,9 +567,9 @@ export function OverviewPage() {
     const mine = active.filter((o) => STAGE_INFO[o.data.stage as OrderStage]?.owner === me.position);
     return (
       <>
-        <PageHeader title={role} description="Your tasks and today's numbers" />
+        <PageHeader title={role} description={`Your ${me.position ? POSITION_LABEL[me.position].toLowerCase() : ""} tasks and today's numbers`} />
         <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-          <StatCard label="Waiting on you" value={mine.length} icon={<Hourglass />} tone={mine.length ? "warning" : "success"} hint="Orders at your step" />
+          <StatCard label="Waiting on you" value={mine.length} icon={<Hourglass />} tone={mine.length ? "warning" : "success"} hint="Orders at your stage" />
           <StatCard label="Orders in progress" value={active.length} icon={<Truck />} hint="Across all roles" />
           <StatCard label="Completed this month" value={completedThisMonth} icon={<UserCheck />} tone="success" hint="Delivered and paid" />
           <StatCard label="Low-stock items" value={lowStock.length} icon={<PackageX />} tone={lowStock.length ? "warning" : "default"} hint="At or below reorder level" />
@@ -591,15 +592,15 @@ export function OverviewPage() {
 
   return (
     <>
-      <PageHeader title={role} description="Business performance, operations, and what needs your decision." />
-      <Tabs defaultValue="general">
+      <PageHeader title={role} help={TERM_HELP.stage} description="Business performance, operations, and what needs your decision." />
+      <Tabs defaultValue="attention">
         <TabsList className="mb-0">
-          <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="general">Overview</TabsTrigger>
           <TabsTrigger value="attention">
             <span className="sm:hidden">Attention</span><span className="hidden sm:inline">Needs attention</span>
             {attention.total > 0 && <span className="rounded-full bg-warning/15 px-1.5 text-xs tabular text-warning">{attention.total}</span>}
           </TabsTrigger>
-          <TabsTrigger value="technical">Technical</TabsTrigger>
+          <TabsTrigger value="technical">System health</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general">
@@ -613,10 +614,10 @@ export function OverviewPage() {
 
         <TabsContent value="technical" className="grid gap-4">
           <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-            <StatCard label="Pipeline success" value={total ? `${Math.round((loaded / total) * 100)}%` : "—"} icon={<Workflow />} hint={`${total - loaded} of ${total} rows rejected this week`} />
-            <StatCard label="Sync issues" value={issues} icon={<GitMerge />} tone={issues ? "warning" : "success"} hint="Conflicts and failed write-backs" />
-            <StatCard label="Rejected rows" value={openRejected} icon={<AlertTriangle />} tone={openRejected ? "warning" : "success"} hint="Waiting in the ledger" />
-            <StatCard label="Bitrix24" value={outage ? "Offline" : "Online"} icon={<ShieldOff />} tone={outage ? "danger" : "success"} hint="API adapter, two-way sync" />
+            <StatCard label="Records saved" value={total ? `${Math.round((loaded / total) * 100)}%` : "—"} icon={<Workflow />} hint={`${total - loaded} of ${total} rows need fixing this week`} />
+            <StatCard label="Update issues" value={issues} icon={<GitMerge />} tone={issues ? "warning" : "success"} hint="Records that need review, and changes that couldn't be sent" />
+            <StatCard label="Records to fix" value={openRejected} icon={<AlertTriangle />} tone={openRejected ? "warning" : "success"} hint="Waiting for you to fix them" />
+            <StatCard label="Bitrix24" value={outage ? "Offline" : "Online"} icon={<ShieldOff />} tone={outage ? "danger" : "success"} hint="Connected to Bitrix24" />
           </div>
           <div className="stagger grid gap-4 lg:grid-cols-3">
             <PipelineChart />

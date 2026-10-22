@@ -91,11 +91,11 @@ export function ActivityPage() {
 
   return (
     <>
-      <PageHeader title="Order tracking" description="Follow each order from the won deal to payment. Open an order to see its documents and full history." />
+      <PageHeader title="Order tracking" description="Follow each order from the confirmed order to payment. Open an order to see its documents and full history." />
       <Tabs defaultValue="orders">
         <TabsList>
-          <TabsTrigger value="orders">Orders</TabsTrigger>
-          <TabsTrigger value="feed">Order activity</TabsTrigger>
+          <TabsTrigger value="orders">Open orders</TabsTrigger>
+          <TabsTrigger value="feed">History</TabsTrigger>
         </TabsList>
 
         <TabsContent value="orders">
@@ -117,7 +117,7 @@ export function ActivityPage() {
             </Select>
           </div>
           {orders.length === 0 ? (
-            <Card><EmptyState title={show === "done" ? "No completed orders" : "No orders here"} description="Try a different filter." /></Card>
+            <Card><EmptyState title={show === "done" ? "No completed orders" : "No orders match this filter"} description="Try a different filter, or clear the search." /></Card>
           ) : (
             <div className="stagger grid gap-3">{orders.map((o) => <OrderCard key={o.id} o={o} />)}</div>
           )}
@@ -125,7 +125,7 @@ export function ActivityPage() {
 
         <TabsContent value="feed">
           <Card className="p-5">
-            {feed.length === 0 ? <EmptyState title="No order activity yet" /> : feed.map(([day, items]) => (
+            {feed.length === 0 ? <EmptyState title="No order history yet" description="Activity appears here once orders start moving." /> : feed.map(([day, items]) => (
               <section key={day} className="mb-6 last:mb-0">
                 <h2 className="mb-3 text-sm font-medium text-muted-foreground">{day}</h2>
                 <ol className="grid gap-2">

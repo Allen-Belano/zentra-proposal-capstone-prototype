@@ -12,18 +12,18 @@ import type { Position } from "@/lib/types";
 
 const POSITION_SCOPE: Record<Position, string> = {
   accounting: "Credit checks and payments",
-  purchasing: "Supplier POs",
+  purchasing: "Supplier purchase orders",
   inventory: "Stock and receiving reports",
-  invoicing: "Sales invoices and WRs",
-  delivery: "Deliveries and DRs",
+  invoicing: "Sales invoices and sales reports",
+  delivery: "Deliveries and delivery receipts",
 };
 import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 import { useApp } from "@/store/app-store";
 
 const DEMO: { email: string; title: string; name: string; scope: string }[] = [
-  { email: "superadmin@ifixz.com", title: "Super Admin", name: "Maria Santos", scope: "Accounts, roles, and audit log" },
-  { email: "depthead@ifixz.com", title: "Department Head", name: "Carlo Reyes", scope: "Business overview, sync, and team roles" },
+  { email: "superadmin@ifixz.com", title: "IT Administration", name: "Maria Santos", scope: "Accounts, roles, and audit log" },
+  { email: "depthead@ifixz.com", title: "Operations Head", name: "Carlo Reyes", scope: "Business overview, Sync, and team roles" },
   ...POSITIONS.map((p) => ({ email: STAFF[p].email, title: POSITION_LABEL[p], name: STAFF[p].name, scope: POSITION_SCOPE[p] })),
 ];
 
@@ -239,10 +239,10 @@ export function LoginPage() {
         <div className="mt-auto">
           <div className="max-w-md">
             <h1 className="text-3xl font-semibold leading-tight tracking-tight">
-              Inventory, orders, and every connected system in one validated workspace.
+              Track your inventory, your orders, and your suppliers in one place.
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-slate-400">
-              Data from Bitrix24 and file imports passes through the validation pipeline before it reaches the central database.
+              Information from Bitrix24 and from files you upload is checked for mistakes before it's saved.
             </p>
           </div>
           <SourcesDiagram />

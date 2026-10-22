@@ -16,6 +16,7 @@ import { OverviewPage } from "@/pages/overview";
 import { PerformancePage } from "@/pages/performance";
 import { PipelinePage } from "@/pages/pipeline";
 import { RecordsPage } from "@/pages/records";
+import { RegisterModulePage } from "@/pages/register-module";
 import { RegistryPage } from "@/pages/registry";
 import { SyncPage } from "@/pages/sync";
 import { UsersPage } from "@/pages/users";
@@ -75,6 +76,7 @@ const routeTree = rootRoute.addChildren([
     page("/pipeline", () => <Guard perm="pipeline.manage"><PipelinePage /></Guard>),
     page("/sync", () => <Guard perm="sync.manage"><SyncPage /></Guard>),
     page("/registry", () => <Guard perm="modules.manage"><RegistryPage /></Guard>),
+    page("/registry/new", () => <Guard perm="modules.manage"><RegisterModulePage /></Guard>),
     page("/backups", () => <Guard perm="backups.manage"><BackupsPage /></Guard>),
     page("/users", UsersPage),
     page("/audit", () => <Guard perm="audit.view"><AuditPage /></Guard>),

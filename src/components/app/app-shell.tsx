@@ -15,12 +15,13 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ModuleIcon } from "@/components/app/module-icon";
 import { ZentraLogo, ZentraMark } from "@/components/app/zentra-logo";
-import { can, moduleAccess, titleOf, type Permission } from "@/lib/rbac";
+import { can, jobTitleOf, moduleAccess, type Permission } from "@/lib/rbac";
 import { useTheme } from "@/lib/theme";
+import { TERM_HELP } from "@/lib/terms";
 import { cn, timeAgo } from "@/lib/utils";
 import { isFor, useApp, useMe } from "@/store/app-store";
 
-interface NavItem { to: string; label: string; icon: ReactNode; count?: number }
+interface NavItem { to: string; label: string; icon: ReactNode; count?: number; hint?: string }
 
 function useNav() {
   const me = useMe();
@@ -42,14 +43,14 @@ function useNav() {
       items: [
         ...(p("activity.view") ? [{ to: "/activity", label: "Order tracking", icon: <Activity /> }] : []),
         ...(me?.role === "dept_head" || me?.role === "employee" ? [{ to: "/performance", label: "Performance", icon: <Gauge /> }] : []),
-        ...(p("pipeline.manage") ? [{ to: "/pipeline", label: "Data pipeline", icon: <Workflow />, count: openRejected }] : []),
-        ...(p("sync.manage") ? [{ to: "/sync", label: "Sync center", icon: <GitMerge />, count: issues }] : []),
+        ...(p("pipeline.manage") ? [{ to: "/pipeline", label: "Data pipeline", icon: <Workflow />, count: openRejected, hint: TERM_HELP.pipeline }] : []),
+        ...(p("sync.manage") ? [{ to: "/sync", label: "Sync", icon: <GitMerge />, count: issues }] : []),
       ],
     },
     {
       title: "Administration",
       items: [
-        ...(p("modules.manage") ? [{ to: "/registry", label: "Module registry", icon: <Puzzle /> }] : []),
+        ...(p("modules.manage") ? [{ to: "/registry", label: "Integration Hub", icon: <Puzzle /> }] : []),
         ...(p("backups.manage") ? [{ to: "/backups", label: "Backups", icon: <DatabaseBackup /> }] : []),
         ...(p("access.manage") ? [{ to: "/users", label: "Team access", icon: <Users /> }] : []),
         ...(p("users.manage") ? [{ to: "/users", label: "Users and roles", icon: <Users /> }] : []),
@@ -97,7 +98,7 @@ function NavList({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate?: 
             const active = item.to === "/" ? path === "/" : path.startsWith(item.to);
             const link = (
               <Link
-                key={item.to}
+                key={`${item.to}-${item.label}`}
                 to={item.to}
                 onClick={onNavigate}
                 data-active={active}
@@ -115,12 +116,22 @@ function NavList({ collapsed, onNavigate }: { collapsed?: boolean; onNavigate?: 
                 )}
               </Link>
             );
-            return collapsed ? (
-              <Tooltip key={item.to}>
+            if (collapsed) {
+              return (
+                <Tooltip key={`${item.to}-${item.label}`}>
+                  <TooltipTrigger asChild>{link}</TooltipTrigger>
+                  <TooltipContent side="right">{item.label}{item.count ? ` (${item.count})` : ""}</TooltipContent>
+                </Tooltip>
+              );
+            }
+            // Long or technical labels get a plain-language explanation on hover.
+            if (!item.hint) return link;
+            return (
+              <Tooltip key={`${item.to}-${item.label}`}>
                 <TooltipTrigger asChild>{link}</TooltipTrigger>
-                <TooltipContent side="right">{item.label}{item.count ? ` (${item.count})` : ""}</TooltipContent>
+                <TooltipContent side="right" className="max-w-xs">{item.hint}</TooltipContent>
               </Tooltip>
-            ) : link;
+            );
           })}
         </div>
       ))}
@@ -151,7 +162,7 @@ function UserMenu() {
       <DropdownMenuContent align="end" className="w-64">
         <DropdownMenuLabel>
           <div className="font-medium">{me.name}</div>
-          <div className="text-xs font-normal text-muted-foreground">{titleOf(me)} · {me.department}</div>
+          <div className="text-xs font-normal text-muted-foreground">{jobTitleOf(me)} · {me.department}</div>
           <div className="truncate text-xs font-normal text-muted-foreground">{me.email}</div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
@@ -163,7 +174,7 @@ function UserMenu() {
               onClick={() => setTheme(t.value)}
               aria-pressed={theme === t.value}
               className={cn(
-                "flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-xs transition-colors duration-200 [&_svg]:size-3.5",
+                "flex min-h-9 items-center justify-center gap-1.5 rounded-lg px-1.5 py-1.5 text-xs transition-colors duration-200 [&_svg]:size-3.5",
                 theme === t.value ? "bg-card font-medium text-foreground shadow-soft" : "text-muted-foreground hover:text-foreground",
               )}
             >
@@ -209,7 +220,7 @@ function NotificationBell() {
       <DropdownMenuContent align="end" className="w-[min(22rem,calc(100vw-2rem))] p-0">
         <div className="flex items-center justify-between gap-2 border-b px-4 py-3">
           <span className="text-sm font-medium">Notifications</span>
-          {unread > 0 && <button onClick={markAll} className="text-xs text-primary hover:underline">Mark all as read</button>}
+          {unread > 0 && <button onClick={markAll} className="-mr-1.5 min-h-9 rounded-lg px-1.5 text-xs text-primary hover:underline">Mark all as read</button>}
         </div>
         {mine.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">You're all caught up</p>
@@ -221,7 +232,13 @@ function NotificationBell() {
                 <DropdownMenuItem
                   key={n.id}
                   className="items-start gap-3 py-2.5"
-                  onSelect={() => { markRead(n.id); if (n.orderId) navigate({ to: "/orders/$orderId", params: { orderId: n.orderId } }); }}
+                  onSelect={() => {
+                    markRead(n.id);
+                    if (!n.recordId) return;
+                    // An order opens its own page; anything else opens the list it lives in.
+                    if (n.moduleId === "operations") navigate({ to: "/orders/$orderId", params: { orderId: n.recordId } });
+                    else if (n.moduleId) navigate({ to: "/modules/$moduleId", params: { moduleId: n.moduleId } });
+                  }}
                 >
                   <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", isNew ? "bg-primary" : "bg-transparent")} />
                   <span className="min-w-0 flex-1">
@@ -298,7 +315,7 @@ export function AppShell() {
         <div className={cn("flex h-16 items-center px-6", collapsed && "justify-center px-0")}>
           {collapsed ? <ZentraMark /> : <ZentraLogo />}
         </div>
-        <div className="flex-1 overflow-y-auto py-3">
+        <div className="scrollbar-slim flex-1 overflow-y-auto py-3">
           <NavList collapsed={collapsed} />
         </div>
         <div className={cn("px-3", collapsed && "flex justify-center")}>
@@ -306,7 +323,7 @@ export function AppShell() {
             onClick={toggle}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
             className={cn(
-              "flex h-9 items-center gap-3 rounded-xl px-3 text-sm text-muted-foreground transition-colors duration-200 hover:bg-muted/50 hover:text-foreground [&_svg]:size-[18px]",
+              "flex h-10 items-center gap-3 rounded-xl px-3 text-sm text-muted-foreground transition-colors duration-200 hover:bg-muted/50 hover:text-foreground [&_svg]:size-[18px]",
               collapsed && "w-10 justify-center px-0",
             )}
           >
@@ -318,8 +335,8 @@ export function AppShell() {
           <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-card text-primary shadow-soft"><ShieldCheck className="h-3.5 w-3.5" /></span>
           {!collapsed && (
             <span className="min-w-0 leading-tight">
-              <span className="block truncate font-medium text-foreground">{titleOf(me)}</span>
-              <span className="block truncate">{me.department}</span>
+              <span className="block truncate font-medium text-foreground">{jobTitleOf(me)}</span>
+              {me.role === "employee" && <span className="block truncate">{me.department}</span>}
             </span>
           )}
         </div>
@@ -362,12 +379,18 @@ export function useSyncNowToast() {
   const modules = useApp((s) => s.modules);
   return async (moduleId: string) => {
     const m = modules.find((x) => x.id === moduleId);
-    if (!(await confirmAction({ title: `Sync ${m?.name ?? "this module"} now?`, description: `Zentra pulls changes and new records from ${m?.source ?? "the source system"}. New records go through validation first.`, confirmLabel: "Sync now" }))) return;
+    const source = m?.source ?? "the source system";
+    const ok = await confirmAction({
+      title: `Update ${m?.name ?? "this system"} now?`,
+      description: `Zentra checks ${source} for changes and new records. New records are checked against your rules first.`,
+      confirmLabel: "Update now",
+    });
+    if (!ok) return;
     const r = syncNow(moduleId);
-    if (r.failed) toast.error("Bitrix24 is unreachable", { description: "Showing the last synced data. Try again when the connection is back." });
+    if (r.failed) toast.error(`Can't reach ${source}`, { description: "Showing the last data we received. Try again when the connection is back." });
     else if (!r.pulled && !r.updated && !r.rejected) toast("Already up to date", { icon: <RefreshCw className="h-4 w-4" /> });
-    else toast.success("Sync complete", {
-      description: [r.pulled && `${r.pulled} new`, r.updated && `${r.updated} updated`, r.rejected && `${r.rejected} rejected`].filter(Boolean).join(", "),
+    else toast.success("Up to date", {
+      description: [r.pulled && `${r.pulled} new`, r.updated && `${r.updated} changed`, r.rejected && `${r.rejected} need fixing`].filter(Boolean).join(", "),
     });
   };
 }

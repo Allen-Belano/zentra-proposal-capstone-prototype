@@ -1,22 +1,23 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { Ban, Check, Eye, Plus } from "lucide-react";
+import { Ban, Check, Eye, MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { confirmAction } from "@/components/app/confirm";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { EmptyState, PageHeader } from "@/components/app/bits";
 import { ModuleIcon } from "@/components/app/module-icon";
-import { MAX_ADDITIONAL, RegisterModuleDialog } from "@/components/app/register-wizard";
+import { MAX_ADDITIONAL } from "@/components/app/register-wizard";
 import { ADAPTER_LABEL, ADAPTERS, FREQUENCY_LABEL } from "@/lib/adapters";
 import type { ModuleDef, SyncFrequency } from "@/lib/types";
 import { cn, formatDate, timeAgo } from "@/lib/utils";
 import { useApp } from "@/store/app-store";
 
 const FILTERS = [
-  { id: "all", label: "All modules", match: () => true },
+  { id: "all", label: "All", match: () => true },
   { id: "active", label: "Active", match: (m: ModuleDef) => m.active },
   { id: "inactive", label: "Deactivated", match: (m: ModuleDef) => !m.active },
   { id: "native", label: "Native", match: (m: ModuleDef) => m.kind === "native" },
@@ -52,10 +53,10 @@ function ModuleCard({ m, onDeactivate }: { m: ModuleDef; onDeactivate: (m: Modul
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-semibold">{m.name}</span>
-              {m.baseline && <Badge variant="secondary">Baseline</Badge>}
+              {m.baseline && <Badge variant="secondary">Built in</Badge>}
               <Badge variant="outline">{external ? `External · ${ADAPTER_LABEL[m.adapter.type]}` : "Native"}</Badge>
               <Badge variant={m.active ? "success" : "secondary"}>{m.active ? "Active" : "Deactivated"}</Badge>
-              {external && outage && m.active && <Badge variant="warning">Source unreachable</Badge>}
+              {external && outage && m.active && <Badge variant="warning">Source not reachable</Badge>}
             </div>
             <p className="mt-1 text-sm text-muted-foreground">{m.description}</p>
           </div>
@@ -66,19 +67,28 @@ function ModuleCard({ m, onDeactivate }: { m: ModuleDef; onDeactivate: (m: Modul
           )}
           {external && (
             <Select value={m.adapter.frequency} onValueChange={async (v) => {
-              if (!(await confirmAction({ title: `Change how often ${m.name} syncs?`, description: `Zentra will sync with ${m.source} on the new schedule.`, details: [["From", FREQUENCY_LABEL[m.adapter.frequency]], ["To", FREQUENCY_LABEL[v as SyncFrequency]]], confirmLabel: "Change sync" }))) return;
-              setModuleFrequency(m.id, v as SyncFrequency); toast.success("Sync frequency updated");
+              if (!(await confirmAction({ title: `Change how often ${m.name} updates?`, description: `Zentra will check ${m.source} on the new schedule.`, details: [["From", FREQUENCY_LABEL[m.adapter.frequency]], ["To", FREQUENCY_LABEL[v as SyncFrequency]]], confirmLabel: "Change schedule" }))) return;
+              setModuleFrequency(m.id, v as SyncFrequency); toast.success("Update schedule changed");
             }}>
-              <SelectTrigger className="h-8 w-40" aria-label="Sync frequency"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-10 w-40" aria-label="How often to update"><SelectValue /></SelectTrigger>
               <SelectContent>{(Object.keys(FREQUENCY_LABEL) as SyncFrequency[]).map((f) => <SelectItem key={f} value={f}>{FREQUENCY_LABEL[f]}</SelectItem>)}</SelectContent>
             </Select>
           )}
           {m.active ? (
-            <Button variant="ghost" size="sm" onClick={() => onDeactivate(m)}><Ban />Deactivate</Button>
+            /* Turning a system off is destructive, so it lives in an overflow menu
+               rather than sitting next to the schedule dropdown. */
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" aria-label={`More actions for ${m.name}`}><MoreHorizontal /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onSelect={() => onDeactivate(m)}><Ban />Turn off</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           ) : (
             <Button size="sm" onClick={async () => {
-              if (!(await confirmAction({ title: `Activate ${m.name}?`, description: "It returns to the sidebar with its records, and anyone with access can use it again.", confirmLabel: "Activate" }))) return;
-              setModuleActive(m.id, true); toast.success(`${m.name} activated`, { description: "It's back in the sidebar with its records." }); }}><Check />Activate</Button>
+              if (!(await confirmAction({ title: `Turn on ${m.name}?`, description: "It returns to the sidebar with its records, and anyone with access can use it again.", confirmLabel: "Turn on" }))) return;
+              setModuleActive(m.id, true); toast.success(`${m.name} turned on`, { description: "It's back in the sidebar with its records." }); }}><Check />Turn on</Button>
           )}
         </div>
       </div>
@@ -87,10 +97,10 @@ function ModuleCard({ m, onDeactivate }: { m: ModuleDef; onDeactivate: (m: Modul
         <dl className="rounded-2xl bg-muted px-4 py-3">
           <KV label="Address"><span className="font-mono text-xs">/modules/{m.id}</span></KV>
           <KV label="Owner">{m.owner ?? "—"}</KV>
-          <KV label="Adapter">{external ? `${ADAPTER_LABEL[m.adapter.type]} · ${m.source}` : "Native: entered in Zentra"}</KV>
-          {external && <KV label="Sync">{FREQUENCY_LABEL[m.adapter.frequency]}</KV>}
+          <KV label="Connection type">{external ? `${ADAPTER_LABEL[m.adapter.type]} · ${m.source}` : "Native: entered in Zentra"}</KV>
+          {external && <KV label="Updates">{FREQUENCY_LABEL[m.adapter.frequency]}</KV>}
           <KV label="Records">{records}</KV>
-          {external && <KV label="Last synced">{m.lastSyncedAt ? timeAgo(m.lastSyncedAt) : "Not yet"}</KV>}
+          {external && <KV label="Last updated">{m.lastSyncedAt ? timeAgo(m.lastSyncedAt) : "Not yet"}</KV>}
           <KV label="Registered">{formatDate(m.registeredAt)} by {m.registeredBy}</KV>
         </dl>
         <div className="grid content-start gap-3">
@@ -101,21 +111,21 @@ function ModuleCard({ m, onDeactivate }: { m: ModuleDef; onDeactivate: (m: Modul
             </dl>
           )}
           <dl className="rounded-2xl bg-muted px-4 py-3">
-            <p className="pb-1 pt-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">Field mapping</p>
+            <p className="pb-1 pt-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">Where each field comes from</p>
             {!external ? (
-              <p className="py-1.5 text-sm text-muted-foreground">Records are typed directly in this module.</p>
+              <p className="py-1.5 text-sm text-muted-foreground">Records are typed directly in Zentra.</p>
             ) : mapping.length === 0 ? (
-              <p className="py-1.5 text-sm text-muted-foreground">No fields mapped yet.</p>
+              <p className="py-1.5 text-sm text-muted-foreground">No fields linked yet.</p>
             ) : (
               <>
                 {mapping.slice(0, 5).map(([k, col]) => <KV key={k} label={label(k)}><span className="font-mono text-xs">← {col}</span></KV>)}
-                {mapping.length > 5 && <p className="py-1.5 text-right text-xs text-muted-foreground">+{mapping.length - 5} more mapped fields</p>}
+                {mapping.length > 5 && <p className="py-1.5 text-right text-xs text-muted-foreground">+{mapping.length - 5} more fields linked</p>}
               </>
             )}
           </dl>
         </div>
       </div>
-      <p className="mt-3 text-xs text-muted-foreground">{m.fields.length} fields · {rules} validation rule{rules === 1 ? "" : "s"}{m.recordName ? ` · records are called "${m.recordName.toLowerCase()}s"` : ""}</p>
+      <p className="mt-3 text-xs text-muted-foreground">{m.fields.length} fields · {rules} rule{rules === 1 ? "" : "s"} for checking records{m.recordName ? ` · records are called "${m.recordName.toLowerCase()}s"` : ""}</p>
     </Card>
   );
 }
@@ -123,17 +133,16 @@ function ModuleCard({ m, onDeactivate }: { m: ModuleDef; onDeactivate: (m: Modul
 export function RegistryPage() {
   const modules = useApp((s) => s.modules);
   const setModuleActive = useApp((s) => s.setModuleActive);
-  const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<FilterId>("all");
   const deactivate = async (m: ModuleDef) => {
     const ok = await confirmAction({
       title: `Deactivate ${m.name}?`,
-      description: `It disappears from the sidebar and its page stops opening${m.kind === "external" ? ", and syncing pauses" : ""}. Its records stay in the central database, and you can activate it again at any time.`,
+      description: `It disappears from the sidebar and its page stops opening${m.kind === "external" ? ", and updates from ${m.source} pause" : ""}. Its records are kept, and you can turn it back on at any time.`,
       confirmLabel: "Deactivate", destructive: true,
     });
     if (!ok) return;
     setModuleActive(m.id, false);
-    toast(`${m.name} deactivated`, { description: "Its records are kept. Activate it again from the registry." });
+    toast(`${m.name} turned off`, { description: "Its records are kept. Turn it back on here at any time." });
   };
   const additional = modules.filter((m) => !m.baseline).length;
   const current = FILTERS.find((f) => f.id === filter)!;
@@ -142,9 +151,9 @@ export function RegistryPage() {
   return (
     <>
       <PageHeader
-        title="Module registry"
-        description={`Inventory and Operations are the baseline modules. You can register up to ${MAX_ADDITIONAL} more (${additional} of ${MAX_ADDITIONAL} used). A registered module appears in the sidebar at once, with its own page and validation rules.`}
-        actions={<Button onClick={() => setOpen(true)} disabled={additional >= MAX_ADDITIONAL}><Plus />Register module</Button>}
+        title="Integration Hub"
+        description={`Inventory and Operations are built in. You can connect up to ${MAX_ADDITIONAL} more (${additional} of ${MAX_ADDITIONAL} used). A connected system appears in the sidebar at once, with its own page and its own rules for checking records.`}
+        actions={<Button asChild disabled={additional >= MAX_ADDITIONAL}><Link to="/registry/new"><Plus />Connect a system</Link></Button>}
       />
       <div role="group" aria-label="Filter modules" className="mb-4 flex flex-wrap gap-2">
         {FILTERS.map((f) => {
@@ -161,12 +170,10 @@ export function RegistryPage() {
         })}
       </div>
       {list.length === 0 ? (
-        <Card><EmptyState title="No modules match this filter" description="Pick another filter or register a new module." /></Card>
+        <Card><EmptyState title="Nothing matches this filter" description="Pick another filter, or connect a new system." /></Card>
       ) : (
         <div className="stagger grid gap-4">{list.map((m) => <ModuleCard key={m.id} m={m} onDeactivate={deactivate} />)}</div>
       )}
-
-      <RegisterModuleDialog open={open} onOpenChange={setOpen} atLimit={additional >= MAX_ADDITIONAL} />
 
     </>
   );

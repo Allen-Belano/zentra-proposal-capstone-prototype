@@ -3,8 +3,6 @@ import type { ModuleAccess, Position, Role, User } from "./types";
 export type Permission =
   | "dashboard.view"
   | "activity.view"
-  | "records.view"
-  | "records.edit"
   | "pipeline.manage"
   | "sync.manage"
   | "modules.manage"
@@ -42,10 +40,10 @@ const FINANCIAL_POSITIONS: Position[] = ["accounting", "invoicing"];
 const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
   super_admin: ["dashboard.view", "activity.view", "users.manage", "audit.view"],
   dept_head: [
-    "dashboard.view", "activity.view", "records.view", "records.edit", "pipeline.manage",
+    "dashboard.view", "activity.view", "pipeline.manage",
     "sync.manage", "modules.manage", "backups.manage", "access.manage",
   ],
-  employee: ["dashboard.view", "activity.view", "records.view", "records.edit"],
+  employee: ["dashboard.view", "activity.view"],
 };
 
 export function can(user: User | null | undefined, permission: Permission): boolean {
@@ -53,9 +51,22 @@ export function can(user: User | null | undefined, permission: Permission): bool
   return ROLE_PERMISSIONS[user.role].includes(permission);
 }
 
-/** The user's job title: their position for employees, otherwise their role. */
+/**
+ * The title shown for a person across the app. It names the scope they actually
+ * own, so a Department Head of Operations reads "Operations Head" rather than a
+ * generic role name.
+ */
 export function titleOf(user: User): string {
-  return user.role === "employee" && user.position ? POSITION_LABEL[user.position] : ROLE_LABEL[user.role];
+  if (user.role === "super_admin") return "IT Administration";
+  if (user.role === "dept_head") return `${user.department} Head`;
+  return "My work";
+}
+
+/** The job title shown next to someone's name. */
+export function jobTitleOf(user: User): string {
+  if (user.role === "employee" && user.position) return POSITION_LABEL[user.position];
+  if (user.role === "super_admin") return "Administrator";
+  return `${user.department} Head`;
 }
 
 /**
@@ -118,13 +129,13 @@ export const PERMISSION_MATRIX: { label: string; roles: Record<Role, boolean> }[
   { label: "Grant access to financial data", roles: { super_admin: true, dept_head: false, employee: false } },
   { label: "Review the audit log", roles: { super_admin: true, dept_head: false, employee: false } },
   { label: "Register, activate, and configure modules", roles: { super_admin: false, dept_head: true, employee: false } },
-  { label: "Run the ETL pipeline and set validation rules", roles: { super_admin: false, dept_head: true, employee: false } },
-  { label: "Review sync issues and run batch processing", roles: { super_admin: false, dept_head: true, employee: false } },
+  { label: "Import files and set the rules that check records", roles: { super_admin: false, dept_head: true, employee: false } },
+  { label: "Review update issues and process many records at once", roles: { super_admin: false, dept_head: true, employee: false } },
   { label: "Manage backups and restore points", roles: { super_admin: false, dept_head: true, employee: false } },
-  { label: "View monthly metrics and customize the Overview", roles: { super_admin: false, dept_head: true, employee: false } },
-  { label: "View every employee's KPIs and department KPIs", roles: { super_admin: false, dept_head: true, employee: false } },
+  { label: "View monthly metrics and set up the Overview", roles: { super_admin: false, dept_head: true, employee: false } },
+  { label: "View every employee's key numbers and the department totals", roles: { super_admin: false, dept_head: true, employee: false } },
   { label: "Assign employees to an Operations role", roles: { super_admin: false, dept_head: true, employee: false } },
-  { label: "Work on orders in their assigned step", roles: { super_admin: false, dept_head: false, employee: true } },
+  { label: "Work on orders at the stage assigned to them", roles: { super_admin: false, dept_head: false, employee: true } },
   { label: "Monitor orders and activity", roles: { super_admin: true, dept_head: true, employee: true } },
 ];
 
@@ -135,10 +146,10 @@ export const POSITION_MATRIX: { label: string; positions: Position[] }[] = [
   { label: "View orders, documents, and order activity", positions: POSITIONS },
   { label: "Clear credit checks and record payments", positions: ["accounting"] },
   { label: "Issue supplier POs and follow up suppliers", positions: ["purchasing"] },
-  { label: "Receive supplier deliveries and post RRs", positions: ["inventory"] },
-  { label: "Issue sales invoices (SI) and written reports (WR)", positions: ["invoicing"] },
-  { label: "Deliver orders and record DRs", positions: ["delivery"] },
+  { label: "Receive supplier deliveries and post receiving reports (RR)", positions: ["inventory"] },
+  { label: "Issue sales invoices (SI) and sales reports (WR)", positions: ["invoicing"] },
+  { label: "Deliver orders and record delivery receipts (DR)", positions: ["delivery"] },
   { label: "See amounts, costs, and receivables", positions: FINANCIAL_POSITIONS },
   { label: "See the Daily process summary", positions: ["accounting"] },
-  { label: "See their own KPIs", positions: POSITIONS },
+  { label: "See their own key numbers", positions: POSITIONS },
 ];
