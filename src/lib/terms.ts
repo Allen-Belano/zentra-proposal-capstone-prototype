@@ -75,15 +75,21 @@ export const TERM_HELP = {
   bitrix: "Bitrix24 is the customer relationship system where sales deals are recorded.",
   sending: "Saving a change in Zentra and pushing it to Bitrix24.",
   review: "The same record changed in both Zentra and Bitrix24. You choose which version to keep.",
-  needsFixing: "Rows from a file that didn't pass your rules. Fix one and load it again, or dismiss it.",
+  needsFixing: "Rows from a file that didn't pass your rules. Fix one and validate it again, or dismiss it.",
   keyNumbers: "Measures that show how the work is going, such as how many orders were finished on time.",
   connection: "How Zentra connects to another system.",
   pipeline: "For files you upload and data from connected apps.",
   stage: "One of the six stages an order goes through, from Accounting to Collection.",
 } as const;
 
+/** Names of pages whose plain-language name differs from their route. */
+export const PAGE_LABEL = {
+  fileImports: "File imports",
+  bitrixUpdates: "Bitrix24 updates",
+} as const;
+
 /** A one-line definition for a module, used in help text and empty states. */
 export const MODULE_HELP = {
   inventory: "Stock levels, reorder points, and storage locations.",
-  operations: "Orders from won Bitrix24 deals, from Accounting to Collection.",
+  operations: "Orders confirmed in Bitrix24, from Accounting to Collection.",
 } as const;

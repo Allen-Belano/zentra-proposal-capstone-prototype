@@ -23,7 +23,7 @@ export const ADAPTERS: Record<Exclude<AdapterType, "native">, { label: string; h
   },
   file: {
     label: "Upload",
-    hint: "Records come from files you upload in the Data pipeline. The columns in your file are matched to the fields below.",
+    hint: "Records come from files you upload on the File imports page. The columns in your file are matched to the fields below.",
     // Nothing to connect to: the file itself is uploaded later, and its columns
     // are matched to the fields here, so there is no path or delimiter to set.
     fields: [],

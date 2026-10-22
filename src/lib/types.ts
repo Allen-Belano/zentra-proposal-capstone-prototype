@@ -37,6 +37,8 @@ export interface ModuleField {
   hideOnTablet?: boolean;
   /** Money that only users with financial access may see. */
   financial?: boolean;
+  /** Shown on the record's own page and form, but not as a list column. */
+  detailOnly?: boolean;
 }
 
 export type AdapterType = "native" | "api" | "database" | "webhook" | "file";
@@ -94,6 +96,8 @@ export interface OrderLogEntry {
   role: Role | "system";
   at: string;
   note?: string;
+  /** A delay reported by staff (Report delay). It explains lateness; it isn't a completed stage. */
+  delay?: boolean;
 }
 
 export interface OrderProcess {

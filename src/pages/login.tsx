@@ -23,7 +23,7 @@ import { useApp } from "@/store/app-store";
 
 const DEMO: { email: string; title: string; name: string; scope: string }[] = [
   { email: "superadmin@ifixz.com", title: "IT Administration", name: "Maria Santos", scope: "Accounts, roles, and audit log" },
-  { email: "depthead@ifixz.com", title: "Operations Head", name: "Carlo Reyes", scope: "Business overview, Sync, and team roles" },
+  { email: "depthead@ifixz.com", title: "Operations Department Head", name: "Carlo Reyes", scope: "Business overview, Bitrix24 updates, and team roles" },
   ...POSITIONS.map((p) => ({ email: STAFF[p].email, title: POSITION_LABEL[p], name: STAFF[p].name, scope: POSITION_SCOPE[p] })),
 ];
 
@@ -77,7 +77,7 @@ const CORE = "#e6fbff";
  */
 function SourcesDiagram() {
   const sources = [
-    { label: "Bitrix24", sub: "Won deals", icon: <ArrowRightLeft className="h-4 w-4" /> },
+    { label: "Bitrix24", sub: "Confirmed orders", icon: <ArrowRightLeft className="h-4 w-4" /> },
     { label: "Inventory files", sub: "CSV imports", icon: <Boxes className="h-4 w-4" /> },
     { label: "Transaction system", sub: "Planned", icon: <Building2 className="h-4 w-4" /> },
   ];

@@ -1,8 +1,9 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { makeSeed } from "@/data/seed";
-import { actionOwner, actionsFor, ORDER_ACTIONS, type OrderStage } from "@/lib/orders";
-import { can, canActAs, canViewFinancials, moduleAccess, POSITION_LABEL } from "@/lib/rbac";
+import { actionOwner, actionsFor, ORDER_ACTIONS, STAGE_INFO, type OrderStage } from "@/lib/orders";
+import { isOpenOverdue, overdueReasonOf, paymentDueOf, slaOf } from "@/lib/sla";
+import { can, canActAs, canExport, canViewFinancials, moduleAccess, POSITION_LABEL } from "@/lib/rbac";
 import { recordLabel, transformRow, validateRow } from "@/lib/validation";
 import { stageLabel } from "@/lib/terms";
 import type {
@@ -46,6 +47,10 @@ interface AppState extends Omit<Seed, "backupSchedule"> {
   addRecord: (moduleId: string, data: Row) => Result;
   updateRecord: (recordId: string, data: Row) => Result;
   setArchived: (recordId: string, archived: boolean) => Result;
+  logExport: (moduleId: string, count: number) => void;
+  reportDelay: (recordId: string, note: string) => Result;
+  /** Alerts on orders that just passed their delivery limit. Runs on load and every minute. */
+  checkOverdue: () => void;
   advanceOrder: (recordId: string, actionId: string, docs: Partial<Record<keyof OrderDocs, string>>) => Result;
 
   runPipeline: (moduleId: string, source: string, rows: Row[]) => PipelineRun;
@@ -191,7 +196,7 @@ export const useApp = create<AppState>()(
         };
         if (moduleId === "operations") {
           const fromBitrix = source?.startsWith("Bitrix24");
-          const description = fromBitrix ? "Deal won in Bitrix24; order created in Zentra"
+          const description = fromBitrix ? "Order confirmed in Bitrix24; order created in Zentra"
             : source ? `Order imported from ${source}` : "Order created in Zentra";
           rec.order = {
             docs: { clientPo: String(clean.client_po || "") || undefined },
@@ -298,6 +303,50 @@ export const useApp = create<AppState>()(
           return { ok: true };
         },
 
+        logExport: (moduleId, count) => {
+          if (!canExport(me())) return;
+          audit("Exported a CSV file", `${mod(moduleId).name}: ${count} record${count === 1 ? "" : "s"}`);
+        },
+
+        reportDelay: (recordId, note) => {
+          const u = me();
+          const rec = get().records.find((r) => r.id === recordId);
+          if (!u || !rec?.order) return { ok: false, errors: ["This order no longer exists."] };
+          const owner = STAGE_INFO[rec.data.stage as OrderStage]?.owner;
+          if (!canActAs(u, owner)) return { ok: false, errors: [`Only ${owner ? POSITION_LABEL[owner] : "the assigned role"} can report a delay on this order.`] };
+          const sla = slaOf(rec);
+          const payLate = rec.data.stage === "Collection" && paymentDueOf(rec)?.state !== "on_track" && !!paymentDueOf(rec);
+          if (rec.data.stage === "Collection" ? !payLate : (rec.data.stage === "Done" || !sla || (!sla.late && !sla.hardToSource)))
+            return { ok: false, errors: [rec.data.stage === "Collection" ? "This payment isn't overdue." : "This order is within its delivery limit."] };
+          const text = note.trim();
+          if (!text) return { ok: false, errors: ["Write a short note about the delay"] };
+          const m = mod(rec.moduleId);
+          const no = recordLabel(m, rec.data);
+          const entry: OrderLogEntry = { ...logEntry(String(rec.data.stage), "Delay reported: outside our control", u), note: text, delay: true };
+          patchRecord(recordId, { updatedAt: now(), updatedBy: u.name, order: { ...rec.order, log: [...rec.order.log, entry] } });
+          notify({ role: "dept_head" }, `${no}: delay reported`, `${text} (${u.name})`, recordId, "operations");
+          event({ moduleId: "operations", recordId, title: `Delay reported on ${no}`, detail: text, level: "info" });
+          audit("Reported a delay", `${m.name} · ${no}`);
+          return { ok: true };
+        },
+
+        checkOverdue: () => {
+          const seen = new Set(get().overdueNotified);
+          const fresh = get().records.filter((r) => r.moduleId === "operations" && !r.archived && !seen.has(r.id) && isOpenOverdue(r));
+          if (!fresh.length) return;
+          for (const r of fresh) {
+            const sla = slaOf(r)!;
+            const no = String(r.data.order_no);
+            const reason = overdueReasonOf(r);
+            const owner = STAGE_INFO[r.data.stage as OrderStage]?.owner;
+            const detail = `${sla.lateDays} day${sla.lateDays === 1 ? "" : "s"} past the ${sla.days}-day limit. ${reason ?? "No reason recorded yet."}`;
+            if (owner) notify({ position: owner }, `${no} is past its delivery limit`, detail, r.id, "operations");
+            notify({ role: "dept_head" }, `${no} is past its delivery limit`, detail, r.id, "operations");
+            event({ moduleId: "operations", recordId: r.id, title: `${no} is past its delivery limit`, detail, level: reason ? "warning" : "error", actor: "System" });
+          }
+          set((s) => ({ overdueNotified: [...s.overdueNotified, ...fresh.map((r) => r.id)] }));
+        },
+
         advanceOrder: (recordId, actionId, docs) => {
           const u = me();
           const rec = get().records.find((r) => r.id === recordId);
@@ -355,7 +404,7 @@ export const useApp = create<AppState>()(
           set((s) => ({ pipelineRuns: [...s.pipelineRuns, run], rejected: [...rejectedRows, ...s.rejected] }));
           event({
             moduleId, title: `File import #${run.number} finished`,
-            detail: `${run.loaded} saved, ${run.rejected} need fixing, from ${source}`,
+            detail: `${run.loaded} validated, ${run.rejected} need fixing, from ${source}`,
             level: run.rejected ? "warning" : "success",
           });
           audit("Imported a file", `${m.name}: ${source}`);
@@ -373,7 +422,7 @@ export const useApp = create<AppState>()(
           const rec = load(row.moduleId, data, "the list of records to fix");
           if (m.kind === "external") queueOutbound(rec);
           set((s) => ({ rejected: s.rejected.map((r) => (r.id === rowId ? { ...r, status: "reloaded", raw: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) } : r)) }));
-          audit("Fixed and reloaded rejected row", `${m.name}: ${recordLabel(m, rec.data)}`);
+          audit("Fixed and validated a record that needed fixing", `${m.name}: ${recordLabel(m, rec.data)}`);
           event({ moduleId: m.id, recordId: rec.id, title: `Rejected row fixed: ${recordLabel(m, rec.data)}`, detail: "Passed validation and loaded", level: "success" });
           return { ok: true };
         },
@@ -381,7 +430,7 @@ export const useApp = create<AppState>()(
         dismissRejected: (rowId) => {
           const row = get().rejected.find((r) => r.id === rowId)!;
           set((s) => ({ rejected: s.rejected.map((r) => (r.id === rowId ? { ...r, status: "dismissed" } : r)) }));
-          audit("Dismissed rejected row", `${mod(row.moduleId).name}: row ${row.rowIndex}`);
+          audit("Dismissed a record that needed fixing", `${mod(row.moduleId).name}: row ${row.rowIndex}`);
         },
 
         syncNow: (moduleId) => {
@@ -531,7 +580,7 @@ export const useApp = create<AppState>()(
         },
 
         registerModule: (m, rules = []) => {
-          if (!can(me(), "modules.manage")) return { ok: false, errors: ["Only Department Heads can register modules."] };
+          if (!can(me(), "modules.manage")) return { ok: false, errors: ["Only the Operations Department Head can connect systems."] };
           if (get().modules.some((x) => x.id === m.id)) return { ok: false, errors: [`A module with the key "${m.id}" already exists.`] };
           const full: ModuleDef = { ...m, registeredAt: now(), registeredBy: actorName(), lastSyncedAt: m.kind === "external" ? now() : undefined };
           set((s) => ({
@@ -585,10 +634,10 @@ export const useApp = create<AppState>()(
           const u = me();
           const target = get().users.find((x) => x.id === userId);
           if (!can(u, "access.manage") || !target || target.role !== "employee" || target.department !== u?.department) {
-            return { ok: false, errors: ["Only the Department Head can grant team KPI access in their department."] };
+            return { ok: false, errors: ["Only the Operations Department Head can let the team see key numbers."] };
           }
           set((s) => ({ users: s.users.map((x) => (x.id === userId ? { ...x, teamKpiAccess: on } : x)) }));
-          audit(on ? "Granted team KPI access" : "Revoked team KPI access", target.name);
+          audit(on ? "Shared the team's key numbers" : "Stopped sharing the team's key numbers", target.name);
           return { ok: true };
         },
 
@@ -624,8 +673,8 @@ export const useApp = create<AppState>()(
       };
     },
     {
-      // v6: renamed terms (Accounting stage, Supplier P.O, Vendor P.O). Older saved demos start fresh.
-      name: "zentra-demo-v6",
+      // v11: payment terms. Older saved demos start fresh.
+      name: "zentra-demo-v11",
       storage: createJSONStorage(() => {
         try {
           localStorage.setItem("__t", "1");

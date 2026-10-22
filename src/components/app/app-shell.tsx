@@ -17,7 +17,7 @@ import { ModuleIcon } from "@/components/app/module-icon";
 import { ZentraLogo, ZentraMark } from "@/components/app/zentra-logo";
 import { can, jobTitleOf, moduleAccess, type Permission } from "@/lib/rbac";
 import { useTheme } from "@/lib/theme";
-import { TERM_HELP } from "@/lib/terms";
+import { PAGE_LABEL, TERM_HELP } from "@/lib/terms";
 import { cn, timeAgo } from "@/lib/utils";
 import { isFor, useApp, useMe } from "@/store/app-store";
 
@@ -29,8 +29,6 @@ function useNav() {
   const issues = useApp((s) => s.syncOps.filter((o) => o.status === "conflict" || o.status === "failed").length);
   const openRejected = useApp((s) => s.rejected.filter((r) => r.status === "open").length);
   const p = (perm: Permission) => can(me, perm);
-  // Operations comes first: it's where the order flow lives. Modules added later keep their registered order.
-  const moduleRank = (id: string) => (id === "operations" ? 0 : id === "ims" ? 1 : 2);
 
   const sections: { title?: string; items: NavItem[] }[] = [
     { items: p("dashboard.view") ? [{ to: "/", label: "Overview", icon: <LayoutDashboard /> }] : [] },
@@ -38,7 +36,6 @@ function useNav() {
       title: "Modules",
       items: modules
         .filter((m) => m.active && moduleAccess(me, m.id) !== "none")
-        .sort((a, b) => moduleRank(a.id) - moduleRank(b.id))
         .map((m) => ({ to: `/modules/${m.id}`, label: m.name, icon: <ModuleIcon name={m.icon} /> })),
     },
     {
@@ -46,8 +43,8 @@ function useNav() {
       items: [
         ...(p("activity.view") ? [{ to: "/activity", label: "Order tracking", icon: <Activity /> }] : []),
         ...(me?.role === "dept_head" || me?.role === "employee" ? [{ to: "/performance", label: "Performance", icon: <Gauge /> }] : []),
-        ...(p("pipeline.manage") ? [{ to: "/pipeline", label: "Data pipeline", icon: <Workflow />, count: openRejected, hint: TERM_HELP.pipeline }] : []),
-        ...(p("sync.manage") ? [{ to: "/sync", label: "Sync", icon: <GitMerge />, count: issues }] : []),
+        ...(p("pipeline.manage") ? [{ to: "/pipeline", label: PAGE_LABEL.fileImports, icon: <Workflow />, count: openRejected, hint: TERM_HELP.pipeline }] : []),
+        ...(p("sync.manage") ? [{ to: "/sync", label: PAGE_LABEL.bitrixUpdates, icon: <GitMerge />, count: issues }] : []),
       ],
     },
     {
@@ -376,7 +373,15 @@ function Sidebar() {
 
 export function AppShell() {
   const me = useMe();
+  const checkOverdue = useApp((s) => s.checkOverdue);
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Stands in for the scheduled job of the real build: alert on orders that pass their delivery limit.
+  useEffect(() => {
+    if (!me) return;
+    checkOverdue();
+    const t = window.setInterval(checkOverdue, 60_000);
+    return () => window.clearInterval(t);
+  }, [me?.id, checkOverdue]);
   const path = useRouterState({ select: (s) => s.location.pathname });
   // Each page starts at the top, so its entrance animation is visible.
   useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [path]);

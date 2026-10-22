@@ -83,7 +83,7 @@ function AdminUsers() {
       setUserRole(u.id, v as Role); toast.success(`${u.name} is now a ${ROLE_LABEL[v as Role]}`); }}>
       <SelectTrigger className="h-10 w-56" aria-label={`${u.name}'s role`}><SelectValue /></SelectTrigger>
       <SelectContent>
-        <SelectItem value="dept_head">Department Head</SelectItem>
+        <SelectItem value="dept_head">{ROLE_LABEL.dept_head}</SelectItem>
         <SelectItem value="employee">Department Employee</SelectItem>
       </SelectContent>
     </Select>
@@ -120,7 +120,7 @@ function AdminUsers() {
   const position = (u: User) => (u.role === "employee" ? (u.position ? POSITION_LABEL[u.position] : "Unassigned") : "—");
   return (
     <>
-      <PageHeader title="Users and roles" description="Enable or disable accounts, assign Department Heads, and grant access to financial data." />
+      <PageHeader title="Users and roles" description="Enable or disable accounts, assign Operations Department Heads, and grant access to financial data." />
       <Card>
         <div className="border-b p-4">
           <div className="relative max-w-sm">

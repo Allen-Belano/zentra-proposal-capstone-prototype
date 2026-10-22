@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { CheckCircle2, Clock, Gauge, Hourglass, Timer, Truck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Gauge, Hourglass, Timer, Truck } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { MonthPicker } from "@/components/app/month-picker";
+import { MonthPicker } from "@/components/app/date-picker";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState, PageHeader, StatCard } from "@/components/app/bits";
 import { Forbidden } from "@/components/app/guard";
@@ -42,20 +42,15 @@ export function useKpiData(month: string) {
   }, [records, users, month]);
 }
 
-const delta = (cur: number, prev: number, prevName: string) => {
-  const d = cur - prev;
-  return d === 0 ? `Same as ${prevName}` : `${d > 0 ? "+" : ""}${d} vs ${prevName}`;
-};
-
 /** One employee's KPIs. Shown to that employee, their Department Head, and authorized colleagues. */
-export function KpiCard({ k, prevName, className }: { k: EmployeeKpis; prevName: string; className?: string }) {
+export function KpiCard({ k, className }: { k: EmployeeKpis; className?: string }) {
   const target = TARGET_HOURS[k.position];
   const tiles = [
-    { label: "Stages completed", value: k.steps, hint: delta(k.steps, k.stepsPrev, prevName), icon: <CheckCircle2 /> },
+    { label: "Stages completed", value: k.steps, hint: "This month", icon: <CheckCircle2 /> },
     { label: "Average handling time", value: formatHours(k.avgHours), hint: `Target: within ${formatHours(target)}`, icon: <Timer />, warn: k.avgHours !== null && k.avgHours > target },
     { label: "Done within target", value: k.onTargetPct === null ? "—" : `${k.onTargetPct}%`, hint: `Stages finished within ${formatHours(target)}`, icon: <Gauge />, warn: k.onTargetPct !== null && k.onTargetPct < 80 },
     { label: "Waiting now", value: k.queue, hint: k.delayedInQueue ? `${k.delayedInQueue} delayed` : "None delayed", icon: <Hourglass />, warn: k.delayedInQueue > 0 },
-    { label: k.roleMetric.label, value: k.roleMetric.value, hint: delta(k.roleMetric.value, k.roleMetric.prev, prevName), icon: <Truck /> },
+    { label: k.roleMetric.label, value: k.roleMetric.value, hint: "This month", icon: <Truck /> },
   ];
   return (
     <Card className={className}>
@@ -85,15 +80,16 @@ const tooltipStyle = {
 
 /** Department-wide KPIs: Department Head and authorized employees only. */
 export function DepartmentKpis({ month }: { month: string }) {
-  const { department: d, prevName } = useKpiData(month);
+  const { department: d } = useKpiData(month);
   const chart = d.byPosition.map((p) => ({ role: POSITION_LABEL[p.position], Stages: p.steps }));
   return (
     <div className="grid gap-4">
-      <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-        <StatCard label="Orders completed" value={d.completed} icon={<CheckCircle2 />} tone="success" hint={delta(d.completed, d.completedPrev, prevName)} />
-        <StatCard label="Average order cycle" value={d.avgCycleDays === null ? "—" : `${d.avgCycleDays.toFixed(1)} days`} icon={<Clock />} hint="Won deal to payment" />
-        <StatCard label="On-time deliveries" value={d.onTimeDeliveryPct === null ? "—" : `${d.onTimeDeliveryPct}%`} icon={<Truck />} tone={d.onTimeDeliveryPct !== null && d.onTimeDeliveryPct < 80 ? "warning" : "default"} hint="Delivered by the due date" />
-        <StatCard label="Stages within target" value={d.onTargetPct === null ? "—" : `${d.onTargetPct}%`} icon={<Gauge />} hint={`${d.steps} stages · ${delta(d.steps, d.stepsPrev, prevName)}`} />
+      <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
+        <StatCard label="Orders completed" value={d.completed} icon={<CheckCircle2 />} tone="success" hint="Collection done this month" />
+        <StatCard label="Average order cycle" value={d.avgCycleDays === null ? "—" : `${d.avgCycleDays.toFixed(1)} days`} icon={<Clock />} hint="Purchasing to delivery" />
+        <StatCard label="On-time deliveries" value={d.onTimeDeliveryPct === null ? "—" : `${d.onTimeDeliveryPct}%`} icon={<Truck />} tone={d.onTimeDeliveryPct !== null && d.onTimeDeliveryPct < 80 ? "warning" : "default"} hint={`${d.delivered} delivered within the time limit`} />
+        <StatCard label="Overdue deliveries" value={d.overdueDeliveryPct === null ? "—" : `${d.overdueDeliveryPct}%`} icon={<AlertTriangle />} tone={d.overdueDeliveryPct ? "danger" : "default"} hint="Delivered past the time limit" />
+        <StatCard label="Stages within target" value={d.onTargetPct === null ? "—" : `${d.onTargetPct}%`} icon={<Gauge />} hint={`${d.steps} stages this month`} />
       </div>
       <Card>
         <CardHeader>
@@ -181,10 +177,10 @@ export function PerformancePage() {
   const me = useMe();
   const months = useMemo(() => [0, 1, 2].map(monthsBack), []);
   const [month, setMonth] = useState(months[0]);
-  const { employees, prevName } = useKpiData(month);
+  const { employees } = useKpiData(month);
   const [selected, setSelected] = useState<string | undefined>();
 
-  if (!me || me.role === "super_admin") return <Forbidden message="Performance numbers are for the Operations department: each employee and their Department Head." />;
+  if (!me || me.role === "super_admin") return <Forbidden message="Performance numbers are for the Operations department: each employee and their Operations Department Head." />;
   const team = canViewTeamKpis(me);
   const mine = employees.find((k) => k.user.id === me.id);
   const visible = employees.filter((k) => canViewKpisOf(me, k.user));
@@ -197,7 +193,7 @@ export function PerformancePage() {
         help={TERM_HELP.keyNumbers}
         description={team
           ? "Key numbers for each Operations employee and the department, measured from completed order stages."
-          : "Your key numbers, measured from the order stages you complete. Only you and your Department Head can see them."}
+          : "Your key numbers, measured from the order stages you complete. Only you and your Operations Department Head can see them."}
         actions={
           <MonthPicker value={month} months={months} onChange={setMonth} />
         }
@@ -206,10 +202,10 @@ export function PerformancePage() {
         {mine && (team ? me.role === "employee" : true) && (
           <section className="grid gap-3">
             <h2 className="text-sm font-medium text-muted-foreground">My performance</h2>
-            <KpiCard k={mine} prevName={prevName} />
+            <KpiCard k={mine} />
           </section>
         )}
-        {!mine && !team && <Card><EmptyState title="No performance numbers yet" description="Ask your Department Head to assign your Operations role." /></Card>}
+        {!mine && !team && <Card><EmptyState title="No performance numbers yet" description="Ask your Operations Department Head to assign your Operations role." /></Card>}
         {team && (
           <>
             <section className="grid gap-3">
@@ -219,7 +215,7 @@ export function PerformancePage() {
             <section className="grid gap-3">
               <h2 className="text-sm font-medium text-muted-foreground">Individual performance</h2>
               <EmployeeTable rows={visible} selected={focus?.user.id} onSelect={setSelected} />
-              {focus && <KpiCard key={focus.user.id} k={focus} prevName={prevName} className="duration-300 ease-fluid animate-in fade-in-0 slide-in-from-bottom-1" />}
+              {focus && <KpiCard key={focus.user.id} k={focus} className="duration-300 ease-fluid animate-in fade-in-0 slide-in-from-bottom-1" />}
             </section>
           </>
         )}

@@ -3,6 +3,7 @@ import { AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/app/date-picker";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { stageLabel } from "@/lib/terms";
@@ -68,10 +69,12 @@ export function RecordForm({
                     <SelectTrigger id={`f-${f.key}`}><SelectValue placeholder={`Choose ${f.label.toLowerCase()}`} /></SelectTrigger>
                     <SelectContent>{f.options.map((o) => <SelectItem key={o} value={o}>{f.key === "stage" ? stageLabel(o) : o}</SelectItem>)}</SelectContent>
                   </Select>
+                ) : f.type === "date" ? (
+                  <DatePicker id={`f-${f.key}`} value={String(values[f.key] ?? "")} onChange={(v) => setValues((s) => ({ ...s, [f.key]: v }))} />
                 ) : (
                   <Input
                     id={`f-${f.key}`}
-                    type={f.type === "date" ? "date" : "text"}
+                    type="text"
                     inputMode={f.type === "number" || f.type === "currency" ? "decimal" : undefined}
                     value={String(values[f.key] ?? "")}
                     onChange={(e) => setValues((s) => ({ ...s, [f.key]: e.target.value }))}
