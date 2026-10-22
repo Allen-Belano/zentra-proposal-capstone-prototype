@@ -13,19 +13,15 @@ import { Money, PageHeader, PaymentBadge, StageBadge, SyncBadge } from "@/compon
 import { Forbidden } from "@/components/app/guard";
 import { actionOwner, actionsFor, delayReason, STAGE_INFO, TRACK, trackIndex, type OrderAction, type OrderStage } from "@/lib/orders";
 import { canActAs, moduleAccess, POSITION_LABEL, ROLE_LABEL } from "@/lib/rbac";
+import { DOC_LABEL, stageLabel } from "@/lib/terms";
 import type { OrderDocs, OrderLogEntry, RecordItem } from "@/lib/types";
 import { cn, formatDate, formatDateTime, timeAgo } from "@/lib/utils";
-import { useApp, useMe } from "@/store/app-store";
+import { useApp, useMe, waitForSync } from "@/store/app-store";
 
-const DOC_ROWS: { key: keyof OrderDocs; label: string }[] = [
-  { key: "clientPo", label: "Client P.O." },
-  { key: "supplierPo", label: "Supplier P.O." },
-  { key: "rr", label: "Receiving report (RR)" },
-  { key: "si", label: "Sales invoice (SI)" },
-  { key: "wr", label: "Written report (WR)" },
-  { key: "dr", label: "Delivery receipt (DR)" },
-  { key: "payment", label: "Official receipt (OR)" },
-];
+const DOC_ROWS: { key: keyof OrderDocs; label: string }[] = (Object.keys(DOC_LABEL) as (keyof OrderDocs)[]).map((key) => ({
+  key,
+  label: DOC_LABEL[key],
+}));
 
 /** What confirming an order action does: where the order goes and who hears about it. */
 function outcome(rec: RecordItem, a: OrderAction) {
@@ -33,8 +29,8 @@ function outcome(rec: RecordItem, a: OrderAction) {
   const next = a.next?.({ ...rec, data: { ...rec.data, payment: paid } });
   const owner = next ? STAGE_INFO[next]?.owner : undefined;
   const moves = next && next !== rec.data.stage
-    ? `The order moves to ${next}${owner ? ` and ${POSITION_LABEL[owner]} is notified` : ""}.`
-    : "The order stays at this step.";
+    ? `The order moves to ${stageLabel(next)}${owner ? ` and ${POSITION_LABEL[owner]} is notified` : ""}.`
+    : "The order stays at this stage.";
   return `${moves}${a.markPaid ? " Payment is marked Paid." : ""} The change is sent to Bitrix24.`;
 }
 
@@ -45,7 +41,7 @@ export function ProgressTrack({ rec }: { rec: RecordItem }) {
   const idx = trackIndex(String(rec.data.stage));
   const skippedReceiving = idx > 2 && !rec.order?.docs.rr;
   return (
-    <ol className="flex" aria-label={`Step: ${rec.data.stage}`}>
+    <ol className="flex" aria-label={`Stage: ${stageLabel(String(rec.data.stage))}`}>
       {TRACK.map((s, i) => {
         const done = i < idx;
         const current = i === idx;
@@ -89,7 +85,15 @@ function ActionDialog({ rec, action, onClose }: { rec: RecordItem; action: Order
     if (!action) return;
     const r = advanceOrder(rec.id, action.id, values);
     if (!r.ok) return setErrors(r.errors ?? ["Couldn't update this order."]);
-    toast.success(action.label, { description: `${rec.data.order_no} updated and sent to Bitrix24.` });
+    toast.promise(waitForSync(rec.id), {
+      loading: `${rec.data.order_no} saved. Sending to Bitrix24…`,
+      success: (state) => state === "synced"
+        ? `${rec.data.order_no} sent to Bitrix24`
+        : state === "conflict"
+          ? `${rec.data.order_no} saved, but it also changed in Bitrix24`
+          : `${rec.data.order_no} saved, but it couldn't be sent to Bitrix24`,
+      error: `Couldn't reach Bitrix24. ${rec.data.order_no} is saved in Zentra and we'll try again.`,
+    });
     close();
   };
   return (
@@ -113,7 +117,7 @@ function ActionDialog({ rec, action, onClose }: { rec: RecordItem; action: Order
           ))}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={close}>Cancel</Button>
-            <Button type="submit">Confirm</Button>
+            <Button type="submit">Save</Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -153,8 +157,16 @@ function NextStep({ rec }: { rec: RecordItem }) {
     if (a.docs?.length) return setPending(a);
     if (!(await confirmAction({ title: `${a.label}?`, description: `${rec.data.order_no} · ${a.hint} ${outcome(rec, a)}`, confirmLabel: a.label }))) return;
     const r = advanceOrder(rec.id, a.id, {});
-    if (r.ok) toast.success(a.label, { description: `${rec.data.order_no} updated and sent to Bitrix24.` });
-    else toast.error(r.errors?.[0] ?? "Couldn't update this order");
+    if (!r.ok) return toast.error(r.errors?.[0] ?? "Couldn't update this order");
+    toast.promise(waitForSync(rec.id), {
+      loading: `${rec.data.order_no} saved. Sending to Bitrix24…`,
+      success: (state) => state === "synced"
+        ? `${rec.data.order_no} sent to Bitrix24`
+        : state === "conflict"
+          ? `${rec.data.order_no} saved, but it also changed in Bitrix24`
+          : `${rec.data.order_no} saved, but it couldn't be sent to Bitrix24`,
+      error: `Couldn't reach Bitrix24. ${rec.data.order_no} is saved in Zentra and we'll try again.`,
+    });
   };
 
   return (
@@ -188,7 +200,7 @@ function NextStep({ rec }: { rec: RecordItem }) {
   );
 }
 
-/** Chronological, plain-language history with the open step at the end. */
+/** Chronological, plain-language history with the open stage at the end. */
 export function OrderTimeline({ rec }: { rec: RecordItem }) {
   const log = rec.order?.log ?? [];
   const stage = rec.data.stage as OrderStage;
@@ -220,7 +232,7 @@ export function OrderTimeline({ rec }: { rec: RecordItem }) {
           </span>
           <div className="min-w-0 flex-1 pt-1">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-              <p className="text-sm font-medium">{stage}: {STAGE_INFO[stage].pending.toLowerCase()}</p>
+              <p className="text-sm font-medium">{stageLabel(stage)}: {STAGE_INFO[stage].pending.toLowerCase()}</p>
               <Badge variant={stage === "On hold" ? "destructive" : "default"} className="w-fit shrink-0">{stage === "On hold" ? "On hold" : "In progress"}</Badge>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -248,7 +260,7 @@ export function OrderDetailPage() {
 
   return (
     <>
-      <Link to="/activity" className="mb-4 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
+      <Link to="/activity" className="mb-4 inline-flex min-h-9 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
         <ArrowLeft className="h-4 w-4" /> Order tracking
       </Link>
       <PageHeader
@@ -263,7 +275,7 @@ export function OrderDetailPage() {
           <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle>Order activity</CardTitle>
-              <CardDescription>Every step from the won deal to the latest update</CardDescription>
+              <CardDescription>Every stage, from the confirmed order to the latest update</CardDescription>
             </CardHeader>
             <CardContent><OrderTimeline rec={rec} /></CardContent>
           </Card>
@@ -274,7 +286,7 @@ export function OrderDetailPage() {
                 {DOC_ROWS.map((d) => (
                   <div key={d.key} className="flex items-center justify-between gap-3 rounded-xl bg-muted px-3 py-2.5 text-sm">
                     <span className="flex min-w-0 items-center gap-2 text-muted-foreground"><FileText className="h-4 w-4 shrink-0" /><span className="truncate">{d.label}</span></span>
-                    {docs[d.key] ? <span className="shrink-0 font-medium tabular">{docs[d.key]}</span> : <span className="shrink-0 text-xs text-muted-foreground">Not issued yet</span>}
+                    {docs[d.key] ? <span className="shrink-0 font-medium tabular">{docs[d.key]}</span> : <span className="shrink-0 text-xs text-muted-foreground">Not created yet</span>}
                   </div>
                 ))}
               </CardContent>
@@ -287,8 +299,8 @@ export function OrderDetailPage() {
                 <Row label="Amount"><Money value={rec.data.amount} /></Row>
                 <Row label="Payment"><PaymentBadge status={String(rec.data.payment)} /></Row>
                 <Row label="Due">{formatDate(String(rec.data.due_date))}{overdue && <Badge variant="destructive" className="ml-2">Overdue</Badge>}</Row>
-                <Row label="Deal won">{formatDateTime(rec.createdAt)}</Row>
-                <Row label="Bitrix24 deal">{rec.externalId ?? "—"}</Row>
+                <Row label="Order confirmed">{formatDateTime(rec.createdAt)}</Row>
+                <Row label="Bitrix24 order number">{rec.externalId ?? "—"}</Row>
               </CardContent>
             </Card>
           </div>

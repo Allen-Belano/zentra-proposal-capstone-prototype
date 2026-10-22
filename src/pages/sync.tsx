@@ -13,6 +13,7 @@ import { useSyncNowToast } from "@/components/app/app-shell";
 import { EmptyState, PageHeader } from "@/components/app/bits";
 import type { BatchItemKind, BatchOutcome, BatchRun, SyncOperation } from "@/lib/types";
 import { recordLabel } from "@/lib/validation";
+import { TERM_HELP } from "@/lib/terms";
 import { cn, formatDate, formatDateTime, formatPeso, timeAgo } from "@/lib/utils";
 import { useApp, type ConflictPolicy } from "@/store/app-store";
 
@@ -33,8 +34,8 @@ function ConflictCard({ op }: { op: SyncOperation }) {
     <Card>
       <CardHeader className="gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-1">
-          <CardTitle className="flex items-center gap-2">{op.recordLabel}<Badge variant="warning">Conflict</Badge></CardTitle>
-          <CardDescription>Changed in both Zentra and {mod.source} since the last sync. Nothing was overwritten. {timeAgo(op.createdAt)}.</CardDescription>
+          <CardTitle className="flex items-center gap-2">{op.recordLabel}<Badge variant="warning">Needs review</Badge></CardTitle>
+          <CardDescription>Changed in both Zentra and {mod.source} since the last update. Nothing was overwritten. {timeAgo(op.createdAt)}.</CardDescription>
         </div>
       </CardHeader>
       <CardContent className="grid gap-4">
@@ -60,8 +61,8 @@ function ConflictCard({ op }: { op: SyncOperation }) {
             resolveConflict(op.id, "external"); toast.success(`Kept the ${mod.source} version`);
           }}>Keep {mod.source} version</Button>
           <Button onClick={async () => {
-            if (!(await confirmAction({ title: `Keep the Zentra version of ${op.recordLabel}?`, description: `Zentra's version is pushed to ${mod.source}, replacing the change made there.`, confirmLabel: "Keep Zentra version" }))) return;
-            resolveConflict(op.id, "zentra"); toast.success("Kept the Zentra version", { description: `Pushed to ${mod.source}.` });
+            if (!(await confirmAction({ title: `Keep the Zentra version of ${op.recordLabel}?`, description: `Zentra's version is sent to ${mod.source}, replacing the change made there.`, confirmLabel: "Keep Zentra version" }))) return;
+            resolveConflict(op.id, "zentra"); toast.success("Kept the Zentra version", { description: `Sent to ${mod.source}.` });
           }}>Keep Zentra version</Button>
         </div>
       </CardContent>
@@ -81,8 +82,8 @@ function FailedCard({ op }: { op: SyncOperation }) {
           <p className="text-sm text-muted-foreground">{op.error} The change is saved in Zentra. {timeAgo(op.createdAt)}.</p>
         </div>
         <Button variant="outline" onClick={async () => {
-          if (!(await confirmAction({ title: `Retry the write-back for ${op.recordLabel}?`, description: "Zentra sends the saved change to Bitrix24 again.", confirmLabel: "Retry" }))) return;
-          retrySync(op.id); toast(outage ? "Retrying while Bitrix24 is unreachable" : "Retrying write-back"); }}>
+          if (!(await confirmAction({ title: `Send ${op.recordLabel} to Bitrix24 again?`, description: "Zentra sends the saved change to Bitrix24 again.", confirmLabel: "Retry" }))) return;
+          retrySync(op.id); toast(outage ? "Bitrix24 can't be reached right now" : "Sending to Bitrix24 again"); }}>
           <RotateCw />Retry
         </Button>
       </CardContent>
@@ -90,7 +91,7 @@ function FailedCard({ op }: { op: SyncOperation }) {
   );
 }
 
-const KIND_LABEL: Record<BatchItemKind, string> = { writeback: "Failed write-back", conflict: "Sync conflict", rejected: "Rejected row" };
+const KIND_LABEL: Record<BatchItemKind, string> = { writeback: "Couldn't send", conflict: "Needs review", rejected: "Needs fixing" };
 
 function useBatchItems() {
   const ops = useApp((s) => s.syncOps);
@@ -103,7 +104,7 @@ function useBatchItems() {
     })),
     ...rejected.filter((r) => r.status === "open").map((r) => {
       const m = modules.find((x) => x.id === r.moduleId);
-      return { kind: "rejected" as BatchItemKind, id: r.id, label: recordLabel(m, r.raw) || `Row ${r.rowIndex}`, type: m?.recordName ?? "Record", issue: r.errors.join("; ") };
+      return { kind: "rejected" as BatchItemKind, id: r.id, label: recordLabel(m, r.raw) || `Record ${r.rowIndex}`, type: m?.recordName ?? "Record", issue: r.errors.join("; ") };
     }),
   ];
 }
@@ -161,21 +162,21 @@ function BatchPanel() {
     const count = (k: string) => chosen.filter((i) => i.kind === k).length;
     const go = await confirmAction({
       title: `Process ${chosen.length} record${chosen.length === 1 ? "" : "s"}?`,
-      description: "Each record is checked against permissions and validation rules. You'll get a summary when it's done.",
+      description: "Each record is checked against your access and your rules. You'll get a summary when it's done.",
       details: [
-        ...(count("writeback") ? [["Failed write-backs", `${count("writeback")} retried`] as [string, string]] : []),
-        ...(count("conflict") ? [["Sync conflicts", policy === "skip" ? `${count("conflict")} left for review` : `${count("conflict")} resolved (${policy === "zentra" ? "keep Zentra" : "keep Bitrix24"})`] as [string, string]] : []),
-        ...(count("rejected") ? [["Rejected rows", `${count("rejected")} re-validated`] as [string, string]] : []),
+        ...(count("writeback") ? [["Couldn't send", `${count("writeback")} sent again`] as [string, string]] : []),
+        ...(count("conflict") ? [["Needs review", policy === "skip" ? `${count("conflict")} left for review` : `${count("conflict")} resolved (${policy === "zentra" ? "keep Zentra" : "keep Bitrix24"})`] as [string, string]] : []),
+        ...(count("rejected") ? [["Needs fixing", `${count("rejected")} checked again`] as [string, string]] : []),
       ],
-      confirmLabel: "Process",
+      confirmLabel: "Process records",
     });
     if (!go) return;
     const result = batchProcess(chosen.map(({ kind, id }) => ({ kind, id })), policy);
-    if (!result) return toast.error("Only Department Heads can run batch processing");
+    if (!result) return toast.error("Only a Department Head can process records in bulk");
     setLast(result);
     setSelected(new Set());
     const ok = result.outcomes.filter((o) => o.result === "success").length;
-    toast.success("Batch processed", { description: `${ok} of ${result.outcomes.length} records succeeded.` });
+    toast.success("Records processed", { description: `${ok} of ${result.outcomes.length} records went through.` });
   };
 
   return (
@@ -183,16 +184,16 @@ function BatchPanel() {
       <Card>
         <CardHeader className="gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="flex flex-col gap-1">
-            <CardTitle>Batch processing</CardTitle>
-            <CardDescription>Process many records in one run. Each one is still checked against role permissions and validation rules.</CardDescription>
+            <CardTitle>Process many records at once</CardTitle>
+            <CardDescription>Each record is still checked against your access and your rules.</CardDescription>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Select value={policy} onValueChange={(v) => setPolicy(v as ConflictPolicy)}>
-              <SelectTrigger className="h-9 sm:w-60" aria-label="How to handle conflicts"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-10 sm:w-60" aria-label="What to do when both systems changed a record"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="skip">Conflicts: review individually</SelectItem>
-                <SelectItem value="zentra">Conflicts: keep Zentra version</SelectItem>
-                <SelectItem value="external">Conflicts: keep Bitrix24 version</SelectItem>
+                <SelectItem value="skip">Ask me each time</SelectItem>
+                <SelectItem value="zentra">Always keep mine</SelectItem>
+                <SelectItem value="external">Always keep Bitrix24's</SelectItem>
               </SelectContent>
             </Select>
             <Button onClick={run} disabled={chosen.length === 0}><Layers />{chosen.length ? `Process ${chosen.length} selected` : "Process selected"}</Button>
@@ -200,11 +201,11 @@ function BatchPanel() {
         </CardHeader>
         <CardContent>
           {items.length === 0 ? (
-            <EmptyState title="Nothing to process" description="Failed write-backs, sync conflicts, and rejected rows will appear here." />
+            <EmptyState title="Nothing to process" description="Records that couldn't be sent, records that need review, and records that need fixing will appear here." />
           ) : (
             <div className="grid gap-1">
               <label className="flex cursor-pointer items-center gap-3 rounded-xl bg-muted px-3 py-2 text-xs font-medium text-muted-foreground">
-                <input type="checkbox" className="h-4 w-4 accent-[hsl(var(--primary))]" checked={allOn}
+                <input type="checkbox" className="h-5 w-5 accent-[hsl(var(--primary))]" checked={allOn}
                   onChange={() => setSelected(allOn ? new Set() : new Set(items.map((i) => `${i.kind}:${i.id}`)))} />
                 Select all ({items.length})
               </label>
@@ -212,7 +213,7 @@ function BatchPanel() {
                 const key = `${i.kind}:${i.id}`;
                 return (
                   <label key={key} className={cn("flex cursor-pointer items-start gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors duration-200 hover:bg-muted", selected.has(key) && "bg-primary/5")}>
-                    <input type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]" checked={selected.has(key)} onChange={() => toggle(key)} />
+                    <input type="checkbox" className="mt-0.5 h-5 w-5 shrink-0 accent-[hsl(var(--primary))]" checked={selected.has(key)} onChange={() => toggle(key)} />
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                         <span className="font-medium">{i.label}</span>
@@ -246,9 +247,10 @@ export function SyncPage() {
   return (
     <>
       <PageHeader
-        title="Sync center"
-        description="Two-way sync with Bitrix24. Edits are saved in Zentra first, then written back. Conflicts wait for your decision."
-        actions={<Button variant="outline" onClick={() => syncNow("operations")}><RefreshCw />Sync now</Button>}
+        title="Sync"
+        help={TERM_HELP.bitrix}
+        description="Changes you make are saved in Zentra first, then sent to Bitrix24. When both systems change the same record, you decide which one to keep."
+        actions={<Button variant="outline" onClick={() => syncNow("operations")}><RefreshCw />Update now</Button>}
       />
 
       <div className="mb-6 grid gap-4 md:grid-cols-[1.4fr_1fr]">
@@ -257,25 +259,25 @@ export function SyncPage() {
             <div className="flex items-center gap-3">
               <span className={cn("h-2.5 w-2.5 rounded-full", outage ? "bg-destructive" : "bg-success")} />
               <div>
-                <div className="font-medium">Bitrix24 {outage ? "unreachable" : "connected"}</div>
-                <div className="text-xs text-muted-foreground">API adapter · {ops_mod?.adapter.frequency === "realtime" ? "Real-time" : ops_mod?.adapter.frequency} sync</div>
+                <div className="font-medium">Bitrix24 {outage ? "not reachable" : "connected"}</div>
+                <div className="text-xs text-muted-foreground">Connected to Bitrix24</div>
               </div>
             </div>
-            <div className="text-sm"><div className="font-medium">{ops_mod?.lastSyncedAt ? timeAgo(ops_mod.lastSyncedAt) : "—"}</div><div className="text-xs text-muted-foreground">Last synced</div></div>
-            <div className="text-sm"><div className="font-medium tabular">{pending}</div><div className="text-xs text-muted-foreground">Writing back</div></div>
+            <div className="text-sm"><div className="font-medium">{ops_mod?.lastSyncedAt ? timeAgo(ops_mod.lastSyncedAt) : "—"}</div><div className="text-xs text-muted-foreground">Last updated</div></div>
+            <div className="text-sm"><div className="font-medium tabular">{pending}</div><div className="text-xs text-muted-foreground">Sending to Bitrix24</div></div>
           </CardContent>
         </Card>
         <Card className="border-dashed">
           <CardContent className="flex items-center justify-between gap-4 p-5">
             <div>
-              <div className="text-sm font-medium">Simulate Bitrix24 outage</div>
-              <div className="text-xs text-muted-foreground">Demo control. Write-backs retry 3 times, then fail.</div>
+              <div className="text-sm font-medium"><span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide">Demo</span> Simulate a Bitrix24 outage</div>
+              <div className="text-xs text-muted-foreground">For the demo only. Changes to Bitrix24 are tried 3 times, then fail.</div>
             </div>
             <Switch checked={outage} onCheckedChange={async (v) => {
               if (!(await confirmAction(v
-                ? { title: "Simulate a Bitrix24 outage?", description: "Demo control: Bitrix24 becomes unreachable. Write-backs retry 3 times, then fail.", confirmLabel: "Start outage", destructive: true }
+                ? { title: "Simulate a Bitrix24 outage?", description: "For the demo only: Bitrix24 becomes unreachable. Changes are tried 3 times, then fail.", confirmLabel: "Start outage", destructive: true }
                 : { title: "Restore the Bitrix24 connection?", description: "Demo control: Bitrix24 becomes reachable again.", confirmLabel: "Restore" }))) return;
-              setOutage(v); toast(v ? "Bitrix24 is now unreachable" : "Bitrix24 connection restored"); }} aria-label="Simulate outage" />
+              setOutage(v); toast(v ? "Bitrix24 can't be reached right now" : "Bitrix24 is reachable again"); }} aria-label="Simulate outage" />
           </CardContent>
         </Card>
       </div>
@@ -287,14 +289,14 @@ export function SyncPage() {
             {review.length > 0 && <span className="rounded-full bg-warning/15 px-1.5 text-xs tabular text-warning">{review.length}</span>}
           </TabsTrigger>
           <TabsTrigger value="batch">
-            <span>Batch<span className="hidden sm:inline"> processing</span></span>
+            <span>Process in bulk</span>
             {batchCount > 0 && <span className="rounded-full bg-muted-foreground/15 px-1.5 text-xs tabular">{batchCount}</span>}
           </TabsTrigger>
           <TabsTrigger value="history">History</TabsTrigger>
         </TabsList>
         <TabsContent value="review" className="grid gap-4">
           {review.length === 0 ? (
-            <Card><EmptyState title="Everything is in sync" description="Conflicts and failed write-backs will appear here for review." /></Card>
+            <Card><EmptyState title="Everything is up to date" description="Records that need review, and changes that couldn't be sent, will appear here." /></Card>
           ) : review.map((op) => (op.status === "conflict" ? <ConflictCard key={op.id} op={op} /> : <FailedCard key={op.id} op={op} />))}
         </TabsContent>
         <TabsContent value="batch"><BatchPanel /></TabsContent>

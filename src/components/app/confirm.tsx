@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { AlertTriangle, ShieldQuestion } from "lucide-react";
+import { AlertTriangle, Loader2, ShieldQuestion } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -14,23 +14,31 @@ export interface ConfirmOptions {
   confirmLabel?: string;
   /** Red styling for removals and other actions that are hard to undo. */
   destructive?: boolean;
+  /**
+   * Runs after the user confirms. While it is running the dialog stays open and
+   * the confirm button shows a spinner, so the user can see the work happening.
+   */
+  onConfirm?: () => void | Promise<void>;
 }
 
 interface ConfirmState {
   request: (ConfirmOptions & { resolve: (ok: boolean) => void }) | null;
   open: boolean;
+  busy: boolean;
 }
 
-const useConfirmStore = create<ConfirmState>(() => ({ request: null, open: false }));
+const useConfirmStore = create<ConfirmState>(() => ({ request: null, open: false, busy: false }));
 
 /**
  * Ask the user to confirm a change before it runs. Resolves true only when they confirm;
- * closing the dialog or pressing Cancel resolves false.
+ * closing the dialog or pressing Cancel resolves false. When the options carry an
+ * `onConfirm`, that runs while the dialog is still open, and the dialog closes once it
+ * finishes.
  */
 export function confirmAction(options: ConfirmOptions): Promise<boolean> {
   const pending = useConfirmStore.getState().request;
   pending?.resolve(false);
-  return new Promise((resolve) => useConfirmStore.setState({ request: { ...options, resolve }, open: true }));
+  return new Promise((resolve) => useConfirmStore.setState({ request: { ...options, resolve }, open: true, busy: false }));
 }
 
 /** Runs `action` only after the user confirms. */
@@ -41,15 +49,15 @@ export async function withConfirm(options: ConfirmOptions, action: () => void) {
 function settle(ok: boolean) {
   const { request } = useConfirmStore.getState();
   // Keep the request while the dialog animates out, so its text doesn't vanish mid-fade.
-  useConfirmStore.setState({ open: false });
+  useConfirmStore.setState({ open: false, busy: false });
   request?.resolve(ok);
 }
 
 /** Mounted once at the app root. */
 export function ConfirmHost() {
-  const { request, open } = useConfirmStore();
+  const { request, open, busy } = useConfirmStore();
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) settle(false); }}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o && !busy) settle(false); }}>
       <DialogContent className="sm:max-w-md">
         {request && (
           <>
@@ -78,9 +86,23 @@ export function ConfirmHost() {
               </dl>
             )}
             <DialogFooter>
-              <Button variant="outline" onClick={() => settle(false)}>Cancel</Button>
-              <Button variant={request.destructive ? "destructive" : "default"} onClick={() => settle(true)} autoFocus>
-                {request.confirmLabel ?? "Confirm"}
+              <Button variant="outline" onClick={() => settle(false)} disabled={busy}>Cancel</Button>
+              <Button
+                variant={request.destructive ? "destructive" : "default"}
+                disabled={busy}
+                onClick={async () => {
+                  if (!request.onConfirm) return settle(true);
+                  useConfirmStore.setState({ busy: true });
+                  try {
+                    await request.onConfirm();
+                    settle(true);
+                  } catch {
+                    settle(false);
+                  }
+                }}
+              >
+                {busy && <Loader2 className="h-4 w-4 animate-spin" />}
+                {request.confirmLabel ?? "Save"}
               </Button>
             </DialogFooter>
           </>

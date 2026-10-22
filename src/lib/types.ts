@@ -214,7 +214,10 @@ export interface AppNotification {
   to: { position?: Position; role?: Role };
   title: string;
   detail?: string;
-  orderId?: string;
+  /** The record this notification is about. */
+  recordId?: string;
+  /** Which system that record belongs to, so the right page opens. */
+  moduleId?: string;
   at: string;
   readBy: string[];
 }

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { Archive, ArchiveRestore, CloudOff, Eye, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -18,11 +18,11 @@ import { can, moduleAccess } from "@/lib/rbac";
 import type { ModuleField, RecordItem } from "@/lib/types";
 import { cn, formatDate, timeAgo } from "@/lib/utils";
 import { recordLabel } from "@/lib/validation";
-import { useApp, useMe } from "@/store/app-store";
+import { useApp, useMe, waitForSync } from "@/store/app-store";
 
-// With the sidebar open, a 1280px laptop leaves about as much room as a tablet, so tablet-hidden columns wait for 2xl.
+// With the sidebar open, a 1280px laptop leaves about as much room as a tablet, so tablet-hidden columns wait for xl.
 const hideCls = (f: ModuleField) =>
-  cn(f.hideOnTablet ? "hidden 2xl:table-cell" : f.hideOnMobile && "hidden md:table-cell");
+  cn(f.hideOnTablet ? "hidden xl:table-cell" : f.hideOnMobile && "hidden lg:table-cell");
 
 function Cell({ field, rec }: { field: ModuleField; rec: RecordItem }) {
   const v = rec.data[field.key];
@@ -34,7 +34,7 @@ function Cell({ field, rec }: { field: ModuleField; rec: RecordItem }) {
     return (
       <span className="flex items-center gap-2 tabular">
         {String(v)}
-        {low && <Badge variant="warning">Low</Badge>}
+        {low && <Badge variant="warning">Low stock</Badge>}
       </span>
     );
   }
@@ -42,17 +42,23 @@ function Cell({ field, rec }: { field: ModuleField; rec: RecordItem }) {
   if (field.key === "payment" && rec.order) return <PaymentBadge status={String(v)} />;
   if (field.primary && rec.order) {
     return (
-      <Link to="/orders/$orderId" params={{ orderId: rec.id }} className="font-medium text-primary underline-offset-4 hover:underline">
+      <Link
+        to="/orders/$orderId"
+        params={{ orderId: rec.id }}
+        onClick={(e) => e.stopPropagation()}
+        className="whitespace-nowrap font-medium text-primary underline-offset-4 hover:underline"
+      >
         {String(v)}
       </Link>
     );
   }
   if (field.type === "number") return <span className="tabular">{String(v)}</span>;
-  return <span className={cn("block max-w-[8rem] truncate whitespace-nowrap xl:max-w-[16rem]", field.primary && "font-medium")} title={String(v)}>{String(v)}</span>;
+  return <span className={cn("block max-w-[8rem] truncate whitespace-nowrap xl:max-w-[12rem]", field.primary && "font-medium")} title={String(v)}>{String(v)}</span>;
 }
 
 export function RecordsPage() {
   const { moduleId } = useParams({ strict: false }) as { moduleId: string };
+  const navigate = useNavigate();
   const me = useMe();
   const mod = useApp((s) => s.modules.find((m) => m.id === moduleId));
   const allRecords = useApp((s) => s.records);
@@ -79,7 +85,7 @@ export function RecordsPage() {
   }, [allRecords, mod, query, filter, filterField, view, seeMoney]);
 
   const access = moduleAccess(me, moduleId);
-  if (!mod || !mod.active) return <Forbidden message="This module doesn't exist or has been deactivated by a Department Head." />;
+  if (!mod || !mod.active) return <Forbidden message="This system doesn't exist, or it was turned off by a Department Head." />;
   if (access === "none") return <Forbidden />;
   const canEdit = access === "edit";
   const isHead = can(me, "sync.manage");
@@ -110,9 +116,9 @@ export function RecordsPage() {
           <>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={async () => {
-              if (!(await confirmAction({ title: "Simulate a Bitrix24 edit?", description: `Demo control: the copy of ${recordLabel(mod, r.data)} in Bitrix24 changes (due date moves 2 days).`, confirmLabel: "Simulate edit" }))) return;
-              simulateRemoteEdit(r.id); toast("Changed in Bitrix24", { description: "Edit this order in Zentra now to trigger a conflict, or press Sync now to pull the change." }); }}>
-              <Zap />Simulate Bitrix24 edit
+              if (!(await confirmAction({ title: "Simulate a Bitrix24 edit?", description: `For the demo only: the copy of ${recordLabel(mod, r.data)} in Bitrix24 changes (due date moves 2 days).`, confirmLabel: "Simulate edit" }))) return;
+              simulateRemoteEdit(r.id); toast("Changed in Bitrix24", { description: "Edit this order in Zentra now to see a conflict, or press Update now to pull the change." }); }}>
+              <Zap />Demo: simulate a Bitrix24 edit
             </DropdownMenuItem>
           </>
         )}
@@ -124,16 +130,16 @@ export function RecordsPage() {
     <>
       <PageHeader
         title={mod.name}
-        description={external ? `${mod.description} Changes made here are written back to ${mod.source}.` : mod.description}
+        description={external ? `${mod.description} Changes you make here are sent to ${mod.source}.` : mod.description}
         actions={
           <>
             {external && (
-              <Button variant="outline" onClick={() => syncNow(mod.id)}><RefreshCw />Sync now</Button>
+              <Button variant="outline" onClick={() => syncNow(mod.id)}><RefreshCw />Update now</Button>
             )}
             {canEdit && <Button onClick={() => setCreating(true)}><Plus />Add {mod.recordName.toLowerCase()}</Button>}
             {!canEdit && (
               <Badge variant="secondary" className="h-9 gap-1.5 px-3.5 text-sm [&_svg]:size-4">
-                <Eye />{external ? "Orders move through role steps" : "View only"}
+                <Eye />{external ? "Orders move through each stage" : "View only"}
               </Badge>
             )}
           </>
@@ -144,9 +150,9 @@ export function RecordsPage() {
         <div className="mb-4 flex items-start gap-3 rounded-2xl border border-destructive/40 bg-destructive/5 p-4 text-sm">
           <CloudOff className="mt-0.5 h-4 w-4 shrink-0 text-destructive" />
           <div>
-            <p className="font-medium">{mod.source} is unreachable</p>
+            <p className="font-medium">{mod.source} can't be reached right now</p>
             <p className="text-muted-foreground">
-              Showing the last synced data{mod.lastSyncedAt ? ` from ${timeAgo(mod.lastSyncedAt)}` : ""}. Edits are saved in Zentra and retried automatically.
+              Showing the last data we received{mod.lastSyncedAt ? `, from ${timeAgo(mod.lastSyncedAt)}` : ""}. Your changes are saved in Zentra and sent again automatically.
             </p>
           </div>
         </div>
@@ -163,7 +169,7 @@ export function RecordsPage() {
               <Select value={filter} onValueChange={setFilter}>
                 <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All {filterField.label.toLowerCase().replace(/y$/, "ie")}s</SelectItem>
+                  <SelectItem value="all">Any {filterField.label.toLowerCase()}</SelectItem>
                   {filterField.options.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
                 </SelectContent>
               </Select>
@@ -181,7 +187,10 @@ export function RecordsPage() {
         {records.length === 0 ? (
           <EmptyState
             title={query || filter !== "all" ? "No matching records" : view === "archived" ? "No archived records" : `No ${mod.recordName.toLowerCase()}s yet`}
-            description={query || filter !== "all" ? "Try a different search or filter." : canEdit && view === "active" ? `Add the first ${mod.recordName.toLowerCase()} or import a file through the data pipeline.` : undefined}
+            description={query || filter !== "all" ? "Try a different search or filter." : canEdit && view === "active" ? `Add the first ${mod.recordName.toLowerCase()}, or import a file from the Data pipeline.` : view === "archived" ? "Records you archive will show up here." : undefined}
+            action={canEdit && view === "active" && !query && filter === "all"
+              ? <Button onClick={() => setCreating(true)}><Plus />Add {mod.recordName.toLowerCase()}</Button>
+              : undefined}
           />
         ) : (
           <>
@@ -192,23 +201,27 @@ export function RecordsPage() {
                     {mod.fields.map((f) => (
                       <TableHead key={f.key} className={hideCls(f)}>{f.label}</TableHead>
                     ))}
-                    {external && <TableHead className="hidden xl:table-cell">Sync</TableHead>}
-                    <TableHead className="hidden xl:table-cell">Updated</TableHead>
+                    {external && <TableHead className="hidden xl:table-cell">Bitrix24</TableHead>}
+                    <TableHead className="hidden 2xl:table-cell">Updated</TableHead>
                     <TableHead className="w-10"><span className="sr-only">Actions</span></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {records.map((r) => (
-                    <TableRow key={r.id}>
+                    <TableRow
+                      key={r.id}
+                      onClick={r.order ? () => navigate({ to: "/orders/$orderId", params: { orderId: r.id } }) : undefined}
+                      className={r.order ? "cursor-pointer" : undefined}
+                    >
                       {mod.fields.map((f) => (
                         <TableCell key={f.key} className={hideCls(f)}><Cell field={f} rec={r} /></TableCell>
                       ))}
                       {external && <TableCell className="hidden xl:table-cell"><SyncBadge state={r.syncState} /></TableCell>}
-                      <TableCell className="hidden whitespace-nowrap text-muted-foreground xl:table-cell">
-                        <div className="text-sm">{timeAgo(r.updatedAt)}</div>
+                      <TableCell className="hidden whitespace-nowrap text-muted-foreground 2xl:table-cell">
+                        <div>{timeAgo(r.updatedAt)}</div>
                         <div className="text-xs">{r.updatedBy}</div>
                       </TableCell>
-                      <TableCell>{actions(r)}</TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>{actions(r)}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -216,7 +229,11 @@ export function RecordsPage() {
             </div>
             <ul className="divide-y sm:hidden">
               {records.map((r) => (
-                <li key={r.id} className="flex items-start gap-2 py-3 pl-4 pr-2">
+                <li
+                  key={r.id}
+                  onClick={r.order ? () => navigate({ to: "/orders/$orderId", params: { orderId: r.id } }) : undefined}
+                  className={r.order ? "flex cursor-pointer items-start gap-2 py-3 pl-4 pr-2" : "flex items-start gap-2 py-3 pl-4 pr-2"}
+                >
                   <div className="min-w-0 flex-1">
                     <div className="text-sm [&>span]:max-w-full"><Cell field={primaryField} rec={r} /></div>
                     <dl className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
@@ -226,10 +243,10 @@ export function RecordsPage() {
                           <dd className="min-w-0"><Cell field={f} rec={r} /></dd>
                         </div>
                       ))}
-                      {external && <div><dt className="sr-only">Sync</dt><dd><SyncBadge state={r.syncState} /></dd></div>}
+                      {external && <div><dt className="sr-only">Bitrix24</dt><dd><SyncBadge state={r.syncState} /></dd></div>}
                     </dl>
                   </div>
-                  {actions(r)}
+                  <div onClick={(e) => e.stopPropagation()}>{actions(r)}</div>
                 </li>
               ))}
             </ul>
@@ -237,7 +254,7 @@ export function RecordsPage() {
         )}
         <div className="border-t px-4 py-3 text-xs text-muted-foreground">
           {records.length} {mod.recordName.toLowerCase()}{records.length === 1 ? "" : "s"}
-          {external && mod.lastSyncedAt && <> · Last synced with {mod.source} {timeAgo(mod.lastSyncedAt)}</>}
+          {external && mod.lastSyncedAt && <> · Last updated from {mod.source} {timeAgo(mod.lastSyncedAt)}</>}
         </div>
       </Card>
 
@@ -247,20 +264,35 @@ export function RecordsPage() {
         module={mod}
         hiddenFields={seeMoney ? [] : mod.fields.filter((f) => f.financial).map((f) => f.key)}
         title={`Add ${mod.recordName.toLowerCase()}`}
-        description="Every entry is checked against this module's validation rules before it's saved."
+        description="Every entry is checked against your rules before it's saved."
         submitLabel={`Add ${mod.recordName.toLowerCase()}`}
         onSubmit={async (data) => {
           const errors = checkRecord(mod.id, data);
           if (errors.length) return { ok: false, errors };
           const ok = await confirmAction({
             title: `Add this ${mod.recordName.toLowerCase()}?`,
-            description: external ? `It's saved in Zentra, then written back to ${mod.source}.` : `It's saved to ${mod.name}.`,
+            description: external ? `It's saved in Zentra, then sent to ${mod.source}.` : `It's saved to ${mod.name}.`,
             details: [[mod.fields.find((f) => f.primary)?.label ?? "Record", String(data[(mod.fields.find((f) => f.primary) ?? mod.fields[0]).key] ?? "")]],
             confirmLabel: `Add ${mod.recordName.toLowerCase()}`,
           });
           if (!ok) return null;
           const r = addRecord(mod.id, data);
-          if (r.ok) { setCreating(false); toast.success(`${mod.recordName} added`, { description: external ? `Writing back to ${mod.source}…` : undefined }); }
+          if (r.ok) {
+            setCreating(false);
+            if (external && r.id) {
+              toast.promise(waitForSync(r.id), {
+                loading: `Sending to ${mod.source}…`,
+                success: (state) => state === "synced"
+                  ? `Sent to ${mod.source}`
+                  : state === "conflict"
+                    ? `Saved, but it also changed in ${mod.source}`
+                    : `Saved, but it couldn't be sent to ${mod.source}`,
+                error: `Couldn't reach ${mod.source}. It's saved in Zentra and we'll try again.`,
+              });
+            } else {
+              toast.success(`${mod.recordName} added`);
+            }
+          }
           return r;
         }}
       />
@@ -271,21 +303,38 @@ export function RecordsPage() {
         hiddenFields={seeMoney ? [] : mod.fields.filter((f) => f.financial).map((f) => f.key)}
         initial={editing?.data}
         title={`Edit ${mod.recordName.toLowerCase()}`}
-        description={external ? `Saved in Zentra first, then written back to ${mod.source}.` : undefined}
+        description={external ? `Saved in Zentra first, then sent to ${mod.source}.` : undefined}
         submitLabel="Save changes"
         onSubmit={async (data) => {
           const errors = checkRecord(mod.id, data, editing!.id);
           if (errors.length) return { ok: false, errors };
           const changed = mod.fields.filter((f) => data[f.key] !== undefined && String(data[f.key]) !== String(editing!.data[f.key] ?? ""));
-          const ok = await confirmAction({
-            title: `Save changes to ${recordLabel(mod, editing!.data)}?`,
-            description: changed.length ? (external ? `The changes are saved in Zentra, then written back to ${mod.source}.` : "The changes are saved.") : "Nothing was changed. Saving keeps it as is.",
-            details: changed.slice(0, 5).map((f) => [f.label, `${editing!.data[f.key] ?? "—"} → ${data[f.key] || "—"}`] as [string, string]),
-            confirmLabel: "Save changes",
-          });
-          if (!ok) return null;
+          if (external && changed.length) {
+            const ok = await confirmAction({
+              title: `Save changes to ${recordLabel(mod, editing!.data)}?`,
+              description: `The changes are saved in Zentra, then sent to ${mod.source}.`,
+              details: changed.slice(0, 5).map((f) => [f.label, `${editing!.data[f.key] ?? "—"} → ${data[f.key] || "—"}`] as [string, string]),
+              confirmLabel: "Save and send",
+            });
+            if (!ok) return null;
+          }
           const r = updateRecord(editing!.id, data);
-          if (r.ok) { setEditing(null); toast.success("Changes saved", { description: external ? `Writing back to ${mod.source}…` : undefined }); }
+          if (r.ok) {
+            setEditing(null);
+            if (external && changed.length) {
+              toast.promise(waitForSync(editing!.id), {
+                loading: `Sending to ${mod.source}…`,
+                success: (state) => state === "synced"
+                  ? `Sent to ${mod.source}`
+                  : state === "conflict"
+                    ? `Saved, but it also changed in ${mod.source}`
+                    : `Saved, but it couldn't be sent to ${mod.source}`,
+                error: `Couldn't reach ${mod.source}. It's saved in Zentra and we'll try again.`,
+              });
+            } else {
+              toast.success("Changes saved");
+            }
+          }
           return r;
         }}
       />

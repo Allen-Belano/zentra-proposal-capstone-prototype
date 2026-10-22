@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { Money, StatCard } from "@/components/app/bits";
+import { HelpTip, Money, StatCard } from "@/components/app/bits";
 import { confirmAction } from "@/components/app/confirm";
 import { completedSteps, dayKey, departmentKpis, formatHours, monthKey } from "@/lib/kpis";
 import { delayReason, ORDER_STAGES } from "@/lib/orders";
@@ -39,18 +39,18 @@ interface WidgetDef {
 export const WIDGETS: WidgetDef[] = [
   { id: "stat-in-progress", kind: "stat", label: "Orders in progress", hint: "Open orders and how many are on track" },
   { id: "stat-completed", kind: "stat", label: "Completed this month", hint: "Delivered and paid" },
-  { id: "stat-awaiting", kind: "stat", label: "Awaiting payment", hint: "Delivered, unpaid, with the receivable" },
+  { id: "stat-awaiting", kind: "stat", label: "Awaiting payment", hint: "Delivered, unpaid, and the money owed to us" },
   { id: "stat-delayed", kind: "stat", label: "Delayed orders", hint: "Past due, on hold, or stuck" },
-  { id: "stat-invoiced", kind: "stat", label: "Invoiced this month", hint: "Sales invoices issued" },
-  { id: "stat-ontime", kind: "stat", label: "On-time deliveries", hint: "Delivered by the due date this month" },
-  { id: "stat-target", kind: "stat", label: "Steps within target", hint: "Department KPI this month" },
+  { id: "stat-invoiced", kind: "stat", label: "Invoiced this month", hint: "" },
+  { id: "stat-ontime", kind: "stat", label: "On-time deliveries", hint: "" },
+  { id: "stat-target", kind: "stat", label: "Stages within target", hint: "Department key numbers this month" },
   { id: "stat-low-stock", kind: "stat", label: "Low-stock items", hint: "At or below reorder level" },
   { id: "daily-summary", kind: "panel", label: "Daily process summary", hint: "Paid and unpaid orders handled on a day", span: 2 },
-  { id: "orders-by-step", kind: "panel", label: "Open orders by step", hint: "Where active orders are waiting", span: 1, charts: ["bar", "pie", "line"] },
+  { id: "orders-by-step", kind: "panel", label: "Open orders by stage", hint: "Where active orders are waiting", span: 1, charts: ["bar", "pie", "line"] },
   { id: "orders-trend", kind: "panel", label: "Orders received and completed", hint: "Last 14 days", span: 2, charts: ["line", "bar"] },
   { id: "payment-status", kind: "panel", label: "Paid vs unpaid", hint: "All orders by payment status", span: 1, charts: ["pie", "bar"] },
-  { id: "steps-by-role", kind: "panel", label: "Steps completed by role", hint: "This month, per Operations role", span: 1, charts: ["bar", "pie", "line"] },
-  { id: "team-kpis", kind: "panel", label: "Team KPIs", hint: "Each employee's KPIs this month", span: 2 },
+  { id: "steps-by-role", kind: "panel", label: "Stages completed by role", hint: "This month, per Operations role", span: 1, charts: ["bar", "pie", "line"] },
+  { id: "team-kpis", kind: "panel", label: "Team performance", hint: "Each employee's key numbers this month", span: 2 },
   { id: "monthly-metrics", kind: "panel", label: "Monthly metrics", hint: "Shared monthly business numbers", span: 3 },
 ];
 const BY_ID = Object.fromEntries(WIDGETS.map((w) => [w.id, w]));
@@ -194,7 +194,7 @@ function StatWidget({ id }: { id: string }) {
     case "stat-delayed": return <StatCard label="Delayed orders" value={d.delayed.length} icon={<Clock />} tone={d.delayed.length ? "warning" : "success"} hint="See Needs attention" />;
     case "stat-invoiced": return <StatCard label="Invoiced this month" value={<Money value={d.invoiced.reduce((a, o) => a + Number(o.data.amount), 0)} />} icon={<Receipt />} hint={`${d.invoiced.length} sales invoices`} />;
     case "stat-ontime": return <StatCard label="On-time deliveries" value={d.dept.onTimeDeliveryPct === null ? "—" : `${d.dept.onTimeDeliveryPct}%`} icon={<CheckCircle2 />} hint="Delivered by the due date" />;
-    case "stat-target": return <StatCard label="Steps within target" value={d.dept.onTargetPct === null ? "—" : `${d.dept.onTargetPct}%`} icon={<Gauge />} hint={`${d.dept.steps} steps this month`} />;
+    case "stat-target": return <StatCard label="Stages within target" value={d.dept.onTargetPct === null ? "—" : `${d.dept.onTargetPct}%`} icon={<Gauge />} hint={`${d.dept.steps} stages this month`} />;
     case "stat-low-stock": return <StatCard label="Low-stock items" value={d.lowStock.length} icon={<PackageX />} tone={d.lowStock.length ? "warning" : "success"} hint="At or below reorder level" />;
     default: return null;
   }
@@ -222,7 +222,7 @@ function TeamKpisPanel({ className }: { className?: string }) {
   return (
     <Card className={className}>
       <CardHeader className="flex-row items-start justify-between gap-3">
-        <div className="flex flex-col gap-1"><CardTitle>Team KPIs</CardTitle><CardDescription>Each employee this month</CardDescription></div>
+        <div className="flex flex-col gap-1"><CardTitle>Team performance</CardTitle><CardDescription>Each employee's key numbers this month</CardDescription></div>
         <Link to="/performance" className="text-sm text-primary hover:underline">Open Performance</Link>
       </CardHeader>
       <CardContent className="flex flex-col gap-1">
@@ -234,7 +234,7 @@ function TeamKpisPanel({ className }: { className?: string }) {
             </span>
             <span className="flex shrink-0 gap-4 text-right text-xs">
               <span><span className="block font-medium tabular">{k.steps}</span><span className="text-muted-foreground">steps</span></span>
-              <span><span className="block font-medium tabular">{formatHours(k.avgHours)}</span><span className="text-muted-foreground">avg</span></span>
+              <span><span className="block font-medium tabular">{formatHours(k.avgHours)}</span><span className="text-muted-foreground">average</span></span>
               <span><span className={cn("block font-medium tabular", k.onTargetPct !== null && k.onTargetPct < 80 && "text-warning")}>{k.onTargetPct === null ? "—" : `${k.onTargetPct}%`}</span><span className="text-muted-foreground">on target</span></span>
             </span>
           </div>
@@ -261,7 +261,7 @@ export function CustomizableGeneral({ renderers }: { renderers: Record<string, (
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">{saved ? "Your custom layout" : "Default layout"} · {shown.length} widgets</p>
+        <p className="text-sm text-muted-foreground">{saved ? "Your custom layout" : "Default layout"} · {shown.length} panels</p>
         <Button variant="outline" size="sm" onClick={() => setOpen(true)}><SlidersHorizontal />Customize</Button>
       </div>
       {stats.length > 0 && (
@@ -317,13 +317,13 @@ function CustomizeDialog({ open, onOpenChange, prefs, hasSaved }: { open: boolea
   const save = async () => {
     const changed = WIDGETS.filter((w) => on(w.id) !== prefs.widgets.includes(w.id));
     const ok = await confirmAction({
-      title: "Apply this Overview layout?",
-      description: "Your General tab will show the widgets and chart types you picked. Only your own Overview changes.",
+      title: "Apply this layout?",
+      description: "Your Overview tab will show the panels and chart types you picked. Only your own Overview changes.",
       details: [
         ["Widgets shown", String(draft.widgets.length)],
         ...(changed.length ? [["Changed", changed.map((w) => `${on(w.id) ? "+" : "−"} ${w.label}`).join(", ")] as [string, string]] : []),
       ],
-      confirmLabel: "Apply layout",
+      confirmLabel: "Apply",
     });
     if (!ok) return;
     setDashboard(draft);
@@ -331,11 +331,11 @@ function CustomizeDialog({ open, onOpenChange, prefs, hasSaved }: { open: boolea
     toast.success("Overview updated");
   };
   const reset = async () => {
-    const ok = await confirmAction({ title: "Reset your Overview to the default?", description: "Your custom widgets, order, and chart types are removed.", confirmLabel: "Reset layout", destructive: true });
+    const ok = await confirmAction({ title: "Reset your Overview to the default?", description: "Your custom panels, order, and chart types are removed.", confirmLabel: "Reset", destructive: true });
     if (!ok) return;
     setDashboard(null);
     onOpenChange(false);
-    toast.success("Overview reset to the default layout");
+    toast.success("Overview reset to the default");
   };
 
   const row = (id: string, list: string[]) => {
@@ -347,27 +347,28 @@ function CustomizeDialog({ open, onOpenChange, prefs, hasSaved }: { open: boolea
       <li key={id} className={cn("flex flex-col gap-2 rounded-2xl p-3 transition-colors duration-200 sm:flex-row sm:items-center", shown ? "bg-muted" : "border border-dashed")}>
         <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3">
           <Switch checked={shown} onCheckedChange={() => toggle(id)} aria-label={`Show ${w.label}`} />
-          <span className="min-w-0">
-            <span className="block text-sm font-medium">{w.label}</span>
-            <span className="block text-xs text-muted-foreground">{w.hint}</span>
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="block truncate text-sm font-medium">{w.label}</span>
+            {/* The panel's explanation is a tooltip, not a second line of small text. */}
+            {w.hint && <HelpTip text={w.hint} label={`About ${w.label}`} />}
           </span>
         </label>
         {shown && (
           <div className="flex items-center gap-2 self-end sm:self-auto">
             {w.charts && (
-              <div role="radiogroup" aria-label={`${w.label} chart type`} className="flex rounded-full bg-card p-0.5 shadow-soft">
+              <div role="radiogroup" aria-label={`${w.label} chart style`} className="flex rounded-full bg-card p-0.5 shadow-soft">
                 {w.charts.map((c) => (
                   <button key={c} type="button" role="radio" aria-checked={(draft.charts[id] ?? w.charts![0]) === c} title={CHART_LABEL[c]}
                     onClick={() => setDraft((d) => ({ ...d, charts: { ...d.charts, [id]: c } }))}
-                    className={cn("grid h-7 w-7 place-items-center rounded-full transition-colors duration-200 [&_svg]:size-3.5",
+                    className={cn("grid h-9 w-9 place-items-center rounded-full transition-colors duration-200 [&_svg]:size-3.5",
                       (draft.charts[id] ?? w.charts![0]) === c ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground")}>
                     {CHART_ICON[c]}<span className="sr-only">{CHART_LABEL[c]} chart</span>
                   </button>
                 ))}
               </div>
             )}
-            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={idx === 0} onClick={() => move(id, -1)} aria-label={`Move ${w.label} up`}><ArrowUp /></Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={idx >= visibleCount - 1} onClick={() => move(id, 1)} aria-label={`Move ${w.label} down`}><ArrowDown /></Button>
+            <Button variant="ghost" size="icon" className="h-10 w-10" disabled={idx === 0} onClick={() => move(id, -1)} aria-label={`Move ${w.label} up`}><ArrowUp /></Button>
+            <Button variant="ghost" size="icon" className="h-10 w-10" disabled={idx >= visibleCount - 1} onClick={() => move(id, 1)} aria-label={`Move ${w.label} down`}><ArrowDown /></Button>
           </div>
         )}
       </li>

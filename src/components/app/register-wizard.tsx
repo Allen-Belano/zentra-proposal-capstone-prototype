@@ -4,7 +4,7 @@ import { AlertTriangle, ArrowRight, Check, FileJson, Plus, Trash2 } from "lucide
 import { toast } from "sonner";
 import { confirmAction } from "@/components/app/confirm";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -33,8 +33,8 @@ interface Draft {
   activate: boolean;
 }
 
-const FIELD_TYPE_LABEL: Record<FieldType, string> = { text: "Text", number: "Number", currency: "Amount (₱)", date: "Date", select: "Choice list" };
-const STEPS = ["Identity and adapter", "Schema and mapping", "Review and activate"];
+const FIELD_TYPE_LABEL: Record<FieldType, string> = { text: "Text", number: "Number", currency: "Amount (₱)", date: "Date", select: "Pick from a list" };
+const STEPS = ["Name and connection", "Fields and where they come from", "Check and turn on"];
 
 let rowSeq = 0;
 const rowsFrom = (template: string): Row[] =>
@@ -140,23 +140,23 @@ function GuidedSetup({ atLimit, onDone }: { atLimit: boolean; onDone: () => void
   const validate = (): Record<string, string> => {
     const e: Record<string, string> = {};
     if (step === 1) {
-      if (!d.name.trim()) e.name = "Give the module a name people will recognize.";
-      if (!d.key) e.key = "A key is needed for the module's address.";
+      if (!d.name.trim()) e.name = "Give the system a name people will recognize.";
+      if (!d.key) e.key = "A key is needed for the system's address.";
       else if (!/^[a-z][a-z0-9-]{1,30}$/.test(d.key)) e.key = "Use lowercase letters, numbers, and single dashes, starting with a letter.";
-      else if (modules.some((m) => m.id === d.key)) e.key = "That key is already registered. Pick another one.";
-      if (!d.owner.trim()) e.owner = "Name the owning team, so issues have someone to go to.";
+      else if (modules.some((m) => m.id === d.key)) e.key = "That key is already used. Pick another one.";
+      if (!d.owner.trim()) e.owner = "Name the team that owns it, so issues have someone to go to.";
       if (d.description.trim().length < 12) e.description = "Add a short description (at least 12 characters).";
       if (external) {
-        if (!d.source.trim()) e.source = "Name the system this module connects to.";
-        for (const f of adapter.fields) if (!String(d.connection[f.key] ?? "").trim()) e[`conn-${f.key}`] = `${f.label} is required for the ${adapter.label} adapter.`;
+        if (!d.source.trim()) e.source = "Name the system you are connecting to.";
+        for (const f of adapter.fields) if (!String(d.connection[f.key] ?? "").trim()) e[`conn-${f.key}`] = `${f.label} is required for a ${adapter.label} connection.`;
       }
     }
     if (step === 2) {
-      if (!d.rows.length) e.rows = "Add at least one field. A module without fields has nothing to validate.";
+      if (!d.rows.length) e.rows = "Add at least one field. Without fields there is nothing to check.";
       d.rows.forEach((r, i) => {
         if (!r.label.trim()) e[`label-${r.id}`] = "Every field needs a label.";
         if (r.type === "select" && !r.options?.length) e[`options-${r.id}`] = "List at least one option, separated by commas.";
-        if (external && i === 0 && !r.source.trim()) e[`source-${r.id}`] = "Map the title field to a source column. Without it, every record looks like a duplicate.";
+        if (external && i === 0 && !r.source.trim()) e[`source-${r.id}`] = "Link the title field to a column in the other system. Without it, every record looks like a duplicate.";
       });
     }
     return e;
@@ -171,12 +171,12 @@ function GuidedSetup({ atLimit, onDone }: { atLimit: boolean; onDone: () => void
 
   const register = async () => {
     if (!(await confirmAction({
-      title: `Register ${d.name.trim()}?`,
-      description: d.activate ? "It goes live in the sidebar right away, with its generated validation rules." : "It's saved as inactive. You can activate it from the registry later.",
-      details: [["Address", `/modules/${d.key}`], ["Type", external ? `External · ${adapter.label}` : "Native"], ["Fields", String(fields.length)], ["Validation rules", String(rules.length)]],
-      confirmLabel: "Register module",
+      title: `Connect ${d.name.trim()}?`,
+      description: d.activate ? "It goes live in the sidebar right away, with the rules for checking records." : "It's saved as turned off. You can turn it on from the Integration Hub later.",
+      details: [["Address", `/modules/${d.key}`], ["Type", external ? `External · ${adapter.label}` : "Native"], ["Fields", String(fields.length)], ["Rules", String(rules.length)]],
+      confirmLabel: "Connect system",
     }))) return;
-    if (atLimit) return setErrors({ submit: `The registry supports up to ${MAX_ADDITIONAL} modules beyond Inventory and Operations.` });
+    if (atLimit) return setErrors({ submit: `You can connect up to ${MAX_ADDITIONAL} more systems, on top of Inventory and Operations.` });
     const template = SCHEMA_TEMPLATES[d.template];
     const connection = Object.fromEntries(Object.entries(d.connection).filter(([, v]) => v.trim()));
     const mod: ModuleDef = {
@@ -193,9 +193,9 @@ function GuidedSetup({ atLimit, onDone }: { atLimit: boolean; onDone: () => void
       active: d.activate, fields: toModuleFields(fields), registeredAt: "", registeredBy: "",
     };
     const r = registerModule(mod, rules.map(({ field, kind, value }) => ({ field, kind, value })));
-    if (!r.ok) return setErrors({ submit: r.errors?.[0] ?? "Couldn't register the module." });
-    toast.success(`${mod.name} registered`, {
-      description: `${d.activate ? `Live at /modules/${mod.id}` : "Saved as inactive"} with ${rules.length} validation rules. Give employees access under Team access.`,
+    if (!r.ok) return setErrors({ submit: r.errors?.[0] ?? "Couldn't connect this system." });
+    toast.success(`${mod.name} connected`, {
+      description: `${d.activate ? `Live at /modules/${mod.id}` : "Saved as turned off"} with ${rules.length} rules for checking records. Give employees access under Team access.`,
     });
     onDone();
     if (d.activate) navigate({ to: "/modules/$moduleId", params: { moduleId: mod.id } });
@@ -204,14 +204,14 @@ function GuidedSetup({ atLimit, onDone }: { atLimit: boolean; onDone: () => void
   return (
     <div className="grid gap-5">
       <StepBar step={step} />
-      <div key={step} className="grid max-h-[55dvh] gap-5 overflow-y-auto pr-1 duration-300 ease-fluid animate-in fade-in-0 slide-in-from-right-2">
+      <div key={step} className="grid gap-5 duration-300 ease-fluid animate-in fade-in-0 slide-in-from-right-2">
         {step === 1 && (
           <>
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Module name" error={errors.name}>
+              <Field label="System name" error={errors.name}>
                 <Input value={d.name} placeholder="Procurement" onChange={(e) => set({ name: e.target.value, key: d.keyTouched ? d.key : slugify(e.target.value) })} />
               </Field>
-              <Field label="Module key" hint={`Used in its address: /modules/${d.key || "key"}`} error={errors.key}>
+              <Field label="Address key" hint={`Used in its address: /modules/${d.key || "key"}`} error={errors.key}>
                 <Input value={d.key} placeholder="procurement" className="font-mono text-xs" onChange={(e) => set({ key: e.target.value.toLowerCase(), keyTouched: true })} />
               </Field>
               <Field label="Owning team" error={errors.owner}>
@@ -235,10 +235,10 @@ function GuidedSetup({ atLimit, onDone }: { atLimit: boolean; onDone: () => void
                 ))}
               </div>
             </Section>
-            <Section title="Module type">
+            <Section title="What kind of system is it?">
               <div role="radiogroup" className="grid gap-2 sm:grid-cols-2">
-                <Choice checked={!external} onClick={() => set({ kind: "native" })} title="Native module" hint="Records are entered directly in Zentra." />
-                <Choice checked={external} onClick={() => set({ kind: "external" })} title="External module" hint="Connects to an existing system through an adapter, with two-way sync." />
+                <Choice checked={!external} onClick={() => set({ kind: "native" })} title="Native" hint="Records are entered directly in Zentra." />
+                <Choice checked={external} onClick={() => set({ kind: "external" })} title="External" hint="Connects to a system you already use, and keeps both sides in step." />
               </div>
             </Section>
             {external && (
@@ -260,28 +260,34 @@ function GuidedSetup({ atLimit, onDone }: { atLimit: boolean; onDone: () => void
                     </div>
                   </Field>
                 </div>
-                <Section title="Adapter" hint="How Zentra talks to the source system.">
+                <Section title="Connection type" hint="How Zentra reaches the other system.">
                   <div role="radiogroup" className="grid gap-2 sm:grid-cols-2">
                     {(Object.keys(ADAPTERS) as ExternalAdapter[]).map((t) => (
                       <Choice key={t} checked={d.adapterType === t} onClick={() => set({ adapterType: t, connection: {} })} title={ADAPTERS[t].label} hint={ADAPTERS[t].hint} />
                     ))}
                   </div>
                 </Section>
-                <Section title="Connection" hint={`${adapter.hint}. Saved as sample settings; the prototype never opens a real connection.`}>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    {adapter.fields.map((f) => (
-                      <Field key={`${d.adapterType}-${f.key}`} label={f.label} error={errors[`conn-${f.key}`]}>
-                        {f.options ? (
-                          <Select value={d.connection[f.key] ?? ""} onValueChange={(v) => set({ connection: { ...d.connection, [f.key]: v } })}>
-                            <SelectTrigger><SelectValue placeholder="Choose…" /></SelectTrigger>
-                            <SelectContent>{f.options.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
-                          </Select>
-                        ) : (
-                          <Input value={d.connection[f.key] ?? ""} placeholder={f.placeholder} className="font-mono text-xs" onChange={(e) => set({ connection: { ...d.connection, [f.key]: e.target.value } })} />
-                        )}
-                      </Field>
-                    ))}
-                  </div>
+                <Section title="Connection" hint={`${adapter.hint} These are sample settings; the prototype never opens a real connection.`}>
+                  {adapter.fields.length === 0 ? (
+                    <p className="rounded-2xl bg-muted px-4 py-3 text-sm text-muted-foreground">
+                      There is nothing to set up here. You choose the file to upload on the Data pipeline, and match its columns to the fields you define.
+                    </p>
+                  ) : (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      {adapter.fields.map((f) => (
+                        <Field key={`${d.adapterType}-${f.key}`} label={f.label} error={errors[`conn-${f.key}`]}>
+                          {f.options ? (
+                            <Select value={d.connection[f.key] ?? ""} onValueChange={(v) => set({ connection: { ...d.connection, [f.key]: v } })}>
+                              <SelectTrigger><SelectValue placeholder="Choose…" /></SelectTrigger>
+                              <SelectContent>{f.options.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+                            </Select>
+                          ) : (
+                            <Input value={d.connection[f.key] ?? ""} placeholder={f.placeholder} className="font-mono text-xs" onChange={(e) => set({ connection: { ...d.connection, [f.key]: e.target.value } })} />
+                          )}
+                        </Field>
+                      ))}
+                    </div>
+                  )}
                 </Section>
               </>
             )}
@@ -290,7 +296,7 @@ function GuidedSetup({ atLimit, onDone }: { atLimit: boolean; onDone: () => void
 
         {step === 2 && (
           <>
-            <Section title="Start from a template" hint="Templates fill in the field list. Validation rules are generated from the final fields.">
+            <Section title="Start from a template" hint="Templates fill in the field list. The rules for checking records are made from the fields you end up with.">
               <div role="radiogroup" className="grid gap-2 sm:grid-cols-2">
                 {Object.entries(SCHEMA_TEMPLATES).map(([id, t]) => (
                   <Choice key={id} checked={d.template === id} onClick={() => set({ template: id, rows: rowsFrom(id), icon: d.template === id ? d.icon : t.icon })} title={t.label} hint={t.hint} icon={<ModuleIcon name={t.icon} className="h-4 w-4" />} />
@@ -300,7 +306,7 @@ function GuidedSetup({ atLimit, onDone }: { atLimit: boolean; onDone: () => void
             </Section>
             <Section
               title="Fields"
-              hint={external ? `Map each field to a column or property in ${d.source || "the source system"}. Unmapped fields arrive empty.` : "Native modules own their fields, so records are typed directly in Zentra."}
+              hint={external ? `Link each field to a column or property in ${d.source || "the other system"}. Fields you don't link will always be blank.` : "Systems typed in here own their fields, so records are entered directly in Zentra."}
             >
               {errors.rows && <p className="text-xs text-destructive">{errors.rows}</p>}
               <div className="grid gap-2">
@@ -311,7 +317,7 @@ function GuidedSetup({ atLimit, onDone }: { atLimit: boolean; onDone: () => void
                         <Input value={r.label} aria-label={`Field ${i + 1} label`} className="bg-card" onChange={(e) => setRow(r.id, { label: e.target.value })} />
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {i === 0 ? <span className="font-medium text-foreground">Title field · must be unique</span> : r.custom ? "Custom field" : <span className="font-mono">{r.key}</span>}
+                        {i === 0 ? <span className="font-medium text-foreground">Title field · must be unique</span> : r.custom ? "Your own field" : <span className="font-mono">{r.key}</span>}
                       </p>
                       {errors[`label-${r.id}`] && <p className="text-xs text-destructive">{errors[`label-${r.id}`]}</p>}
                     </div>
@@ -365,12 +371,12 @@ function GuidedSetup({ atLimit, onDone }: { atLimit: boolean; onDone: () => void
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
                 <div>
                   <p className="font-medium">{unmapped.length} field{unmapped.length === 1 ? " isn't" : "s aren't"} mapped</p>
-                  <p className="text-muted-foreground">Unmapped fields will always arrive empty{unmapped.some((f) => f.required) ? ", so their required rule will reject every synced record" : ""}.</p>
+                  <p className="text-muted-foreground">Fields you haven't linked will always be blank{unmapped.some((f) => f.required) ? ", so every record will come back for fixing" : ""}.</p>
                 </div>
               </div>
             )}
             <div className="grid gap-3 sm:grid-cols-2">
-              <Review title="Identity">
+              <Review title="Name">
                 <ReviewRow label="Name"><span className="inline-flex items-center gap-1.5"><ModuleIcon name={d.icon} className="h-4 w-4" />{d.name}</span></ReviewRow>
                 <ReviewRow label="Address"><span className="font-mono text-xs">/modules/{d.key}</span></ReviewRow>
                 <ReviewRow label="Owner">{d.owner}</ReviewRow>
@@ -398,7 +404,7 @@ function GuidedSetup({ atLimit, onDone }: { atLimit: boolean; onDone: () => void
                   </ReviewRow>
                 ))}
               </Review>
-              <Review title={`Validation rules · ${rules.length}`}>
+              <Review title={`Rules for checking records · ${rules.length}`}>
                 <ul className="grid gap-1.5 text-sm">
                   {rules.slice(0, 8).map((r) => <li key={`${r.field}-${r.kind}`} className="flex gap-2"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-success" />{r.label}</li>)}
                   {rules.length > 8 && <li className="text-xs text-muted-foreground">+{rules.length - 8} more generated from the fields</li>}
@@ -408,9 +414,9 @@ function GuidedSetup({ atLimit, onDone }: { atLimit: boolean; onDone: () => void
             <label className="flex items-center justify-between gap-4 rounded-2xl bg-muted px-4 py-3 text-sm">
               <span>
                 <span className="block font-medium">Activate right after registering</span>
-                <span className="block text-xs text-muted-foreground">It appears in the sidebar at once. You can turn it off later in the registry.</span>
+                <span className="block text-xs text-muted-foreground">It appears in the sidebar at once. You can turn it off later under the Integration Hub.</span>
               </span>
-              <Switch checked={d.activate} onCheckedChange={(v) => set({ activate: v })} aria-label="Activate right after registering" />
+              <Switch checked={d.activate} onCheckedChange={(v) => set({ activate: v })} aria-label="Turn it on straight away" />
             </label>
             {errors.submit && <p role="alert" className="text-sm text-destructive">{errors.submit}</p>}
           </>
@@ -418,7 +424,7 @@ function GuidedSetup({ atLimit, onDone }: { atLimit: boolean; onDone: () => void
       </div>
       <DialogFooter>
         {step === 1 ? <Button type="button" variant="outline" onClick={onDone}>Cancel</Button> : <Button type="button" variant="outline" onClick={() => { setErrors({}); setStep((s) => s - 1); }}>Back</Button>}
-        {step < 3 ? <Button type="button" onClick={next}>Continue<ArrowRight /></Button> : <Button type="button" onClick={register}><Check />Register module</Button>}
+        {step < 3 ? <Button type="button" onClick={next}>Continue<ArrowRight /></Button> : <Button type="button" onClick={register}><Check />Connect system</Button>}
       </DialogFooter>
     </div>
   );
@@ -472,7 +478,7 @@ const RULE_KINDS: RuleKind[] = ["required", "number", "min", "pattern", "unique"
 
 function parseManifest(text: string): { mod?: ModuleDef; rules?: { field: string; kind: RuleKind; value?: string }[]; errors: string[] } {
   let json: Record<string, unknown>;
-  try { json = JSON.parse(text); } catch (e) { return { errors: [`The manifest isn't valid JSON: ${(e as Error).message}`] }; }
+  try { json = JSON.parse(text); } catch (e) { return { errors: [`The setup file isn't in the right format: ${(e as Error).message}`] }; }
   const errors: string[] = [];
   const str = (k: string) => (typeof json[k] === "string" && (json[k] as string).trim() ? (json[k] as string).trim() : undefined);
   const id = str("id");
@@ -519,24 +525,24 @@ function ManifestImport({ atLimit, onDone }: { atLimit: boolean; onDone: () => v
   const [text, setText] = useState(SAMPLE_MANIFEST);
   const [errors, setErrors] = useState<string[]>([]);
   const submit = async () => {
-    if (atLimit) return setErrors([`The registry supports up to ${MAX_ADDITIONAL} modules beyond Inventory and Operations.`]);
+    if (atLimit) return setErrors([`You can connect up to ${MAX_ADDITIONAL} more systems, on top of Inventory and Operations.`]);
     const { mod, rules, errors } = parseManifest(text);
     if (!mod) return setErrors(errors);
     if (!(await confirmAction({
-      title: `Register ${mod.name} from this manifest?`,
+      title: `Connect ${mod.name} from this setup file?`,
       description: "It goes live in the sidebar right away.",
-      details: [["Address", `/modules/${mod.id}`], ["Fields", String(mod.fields.length)], ["Validation rules", String(rules?.length ?? 0)]],
-      confirmLabel: "Register module",
+      details: [["Address", `/modules/${mod.id}`], ["Fields", String(mod.fields.length)], ["Rules", String(rules?.length ?? 0)]],
+      confirmLabel: "Connect system",
     }))) return;
     const r = registerModule(mod, rules);
     if (!r.ok) return setErrors(r.errors ?? []);
-    toast.success(`${mod.name} registered`, { description: "It's in the sidebar now. Grant employees access under Team access." });
+    toast.success(`${mod.name} connected`, { description: "It's in the sidebar now. Grant employees access under Team access." });
     setErrors([]);
     onDone();
   };
   return (
     <div className="grid gap-4">
-      <p className="text-sm text-muted-foreground">Paste the module's JSON manifest. It's activated immediately, with no redeployment.</p>
+      <p className="text-sm text-muted-foreground">Paste the setup file for this system. Ask your IT team for it. It's activated straight away, with no redeployment.</p>
       <Textarea value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} className="min-h-[300px] font-mono text-xs leading-relaxed" />
       {errors.length > 0 && (
         <ul role="alert" className="list-disc rounded-xl border border-destructive/40 bg-destructive/10 p-3 pl-7 text-sm text-destructive">
@@ -545,37 +551,26 @@ function ManifestImport({ atLimit, onDone }: { atLimit: boolean; onDone: () => v
       )}
       <DialogFooter>
         <Button variant="outline" onClick={() => setText(SAMPLE_MANIFEST)}>Reset to sample</Button>
-        <Button onClick={submit}><FileJson />Register module</Button>
+        <Button onClick={submit}><FileJson />Connect system</Button>
       </DialogFooter>
     </div>
   );
 }
 
-export function RegisterModuleDialog({ open, onOpenChange, atLimit }: { open: boolean; onOpenChange: (o: boolean) => void; atLimit: boolean }) {
-  // A new key each time the dialog opens starts every registration from a clean draft.
-  const [session, setSession] = useState(0);
-  const [wasOpen, setWasOpen] = useState(open);
-  if (open !== wasOpen) {
-    setWasOpen(open);
-    if (open) setSession((n) => n + 1);
-  }
-  const close = () => onOpenChange(false);
+/**
+ * The registration wizard, without any dialog chrome. It gets its own page
+ * (/registry/new) because connecting a system is a long, multi-step task that
+ * people need to be able to link to and come back to.
+ */
+export function RegisterModuleWizard({ atLimit, onDone }: { atLimit: boolean; onDone: () => void }) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-3xl">
-        <DialogHeader>
-          <DialogTitle>Register a module</DialogTitle>
-          <DialogDescription>Add a native module or connect an existing system. It goes live without redeploying.</DialogDescription>
-        </DialogHeader>
-        <Tabs key={session} defaultValue="guided" className="min-w-0">
-          <TabsList>
-            <TabsTrigger value="guided">Guided setup</TabsTrigger>
-            <TabsTrigger value="json"><FileJson className="h-3.5 w-3.5" />JSON manifest</TabsTrigger>
-          </TabsList>
-          <TabsContent value="guided"><GuidedSetup atLimit={atLimit} onDone={close} /></TabsContent>
-          <TabsContent value="json"><ManifestImport atLimit={atLimit} onDone={close} /></TabsContent>
-        </Tabs>
-      </DialogContent>
-    </Dialog>
+    <Tabs defaultValue="guided" className="min-w-0">
+      <TabsList>
+        <TabsTrigger value="guided">Guided setup</TabsTrigger>
+        <TabsTrigger value="json"><FileJson className="h-3.5 w-3.5" />Setup file</TabsTrigger>
+      </TabsList>
+      <TabsContent value="guided"><GuidedSetup atLimit={atLimit} onDone={onDone} /></TabsContent>
+      <TabsContent value="json"><ManifestImport atLimit={atLimit} onDone={onDone} /></TabsContent>
+    </Tabs>
   );
 }

@@ -22,12 +22,11 @@ export const ADAPTERS: Record<Exclude<AdapterType, "native">, { label: string; h
     ],
   },
   file: {
-    label: "File", hint: "A delimited export dropped in a folder on a schedule",
-    fields: [
-      { key: "path", label: "File location", placeholder: "/exports/purchase-orders/daily.csv" },
-      { key: "delimiter", label: "Delimiter", options: ["Comma", "Semicolon", "Tab", "Pipe"] },
-      { key: "encoding", label: "Encoding", options: ["UTF-8", "Windows-1252"] },
-    ],
+    label: "Upload",
+    hint: "Records come from files you upload in the Data pipeline. The columns in your file are matched to the fields below.",
+    // Nothing to connect to: the file itself is uploaded later, and its columns
+    // are matched to the fields here, so there is no path or delimiter to set.
+    fields: [],
   },
   webhook: {
     label: "Webhook", hint: "The source system pushes events to a Zentra receiver",
@@ -40,7 +39,7 @@ export const ADAPTERS: Record<Exclude<AdapterType, "native">, { label: string; h
 };
 
 export const ADAPTER_LABEL: Record<AdapterType, string> = {
-  native: "Native", api: "API", database: "Database", file: "File", webhook: "Webhook",
+  native: "Native", api: "API", database: "Database", file: "Upload", webhook: "Webhook",
 };
 
 export const FREQUENCY_LABEL: Record<SyncFrequency, string> = {
@@ -100,7 +99,7 @@ export const slugify = (text: string, sep = "-") =>
   text.toLowerCase().replace(/[^a-z0-9]+/g, sep).replace(new RegExp(`^\\${sep}+|\\${sep}+$`, "g"), "");
 
 /**
- * Validation rules generated from a schema: the first field must be unique, required fields
+ * Rules for checking records, generated from the fields: the first field must be unique, required fields
  * can't be empty, selects only accept their options, amounts can't be negative, and dates
  * must be YYYY-MM-DD.
  */
