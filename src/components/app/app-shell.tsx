@@ -29,6 +29,8 @@ function useNav() {
   const issues = useApp((s) => s.syncOps.filter((o) => o.status === "conflict" || o.status === "failed").length);
   const openRejected = useApp((s) => s.rejected.filter((r) => r.status === "open").length);
   const p = (perm: Permission) => can(me, perm);
+  // Operations comes first: it's where the order flow lives. Modules added later keep their registered order.
+  const moduleRank = (id: string) => (id === "operations" ? 0 : id === "ims" ? 1 : 2);
 
   const sections: { title?: string; items: NavItem[] }[] = [
     { items: p("dashboard.view") ? [{ to: "/", label: "Overview", icon: <LayoutDashboard /> }] : [] },
@@ -36,6 +38,7 @@ function useNav() {
       title: "Modules",
       items: modules
         .filter((m) => m.active && moduleAccess(me, m.id) !== "none")
+        .sort((a, b) => moduleRank(a.id) - moduleRank(b.id))
         .map((m) => ({ to: `/modules/${m.id}`, label: m.name, icon: <ModuleIcon name={m.icon} /> })),
     },
     {
@@ -288,50 +291,76 @@ function TitleBar() {
   );
 }
 
-export function AppShell() {
-  const me = useMe();
-  const [collapsed, setCollapsed] = useState(() => {
-    try { return localStorage.getItem("zentra-sidebar") === "collapsed"; } catch { return false; }
-  });
-  const [mobileOpen, setMobileOpen] = useState(false);
-  const path = useRouterState({ select: (s) => s.location.pathname });
-  // Each page starts at the top, so its entrance animation is visible.
-  useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [path]);
-  const toggle = () => {
-    setCollapsed((c) => {
-      try { localStorage.setItem("zentra-sidebar", c ? "open" : "collapsed"); } catch { /* ignore */ }
-      return !c;
-    });
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(() => matchMedia(query).matches);
+  useEffect(() => {
+    const mq = matchMedia(query);
+    const onChange = () => setMatches(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [query]);
+  return matches;
+}
+
+/**
+ * Desktop: an icon rail that opens over the page while the pointer (or keyboard focus) is on it.
+ * Tablet: the same rail with a button to open and close it, since there's no hover on touch.
+ * Phones use the slide-out menu instead.
+ */
+function Sidebar() {
+  const me = useMe()!;
+  const desktop = useMediaQuery("(min-width: 1024px)");
+  const [open, setOpen] = useState(false);
+  const hoverTimer = useRef<number>();
+  const collapsed = !open;
+  // Close again when the layout switches between tablet and desktop.
+  useEffect(() => setOpen(false), [desktop]);
+  useEffect(() => () => window.clearTimeout(hoverTimer.current), []);
+  // A short delay keeps the rail from flaring open when the pointer only passes over it.
+  const hoverTo = (next: boolean) => {
+    window.clearTimeout(hoverTimer.current);
+    hoverTimer.current = window.setTimeout(() => setOpen(next), next ? 120 : 80);
   };
-  if (!me) return null;
 
   return (
-    <div className="flex min-h-full">
-      {/* min-h-full (not h-full) lets the page grow past the viewport, so the sidebar stays put while scrolling. */}
-      <aside className={cn(
-        "safe-top sticky top-3 my-3 ml-3 hidden h-[calc(100dvh-1.5rem)] shrink-0 self-start flex-col overflow-hidden rounded-3xl border border-sidebar-border bg-sidebar shadow-soft transition-[width] duration-300 ease-fluid lg:flex",
-        collapsed ? "w-[72px]" : "w-64",
-      )}>
-        <div className={cn("flex h-16 items-center px-6", collapsed && "justify-center px-0")}>
+    // The wrapper holds the rail's width in the layout; the panel inside widens over the page.
+    <div className="safe-top sticky top-3 z-40 my-3 ml-3 hidden h-[calc(100dvh-1.5rem)] w-[72px] shrink-0 self-start md:block">
+      {!desktop && open && (
+        <button aria-label="Close sidebar" tabIndex={-1} onClick={() => setOpen(false)} className="fixed inset-0 -z-10 cursor-default bg-black/20 duration-200 animate-in fade-in-0" />
+      )}
+      <aside
+        onMouseEnter={desktop ? () => hoverTo(true) : undefined}
+        onMouseLeave={desktop ? () => hoverTo(false) : undefined}
+        onFocus={desktop ? () => { window.clearTimeout(hoverTimer.current); setOpen(true); } : undefined}
+        onBlur={desktop ? (e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false); } : undefined}
+        className={cn(
+          "absolute inset-y-0 left-0 flex flex-col overflow-hidden rounded-3xl border border-sidebar-border bg-sidebar transition-[width,box-shadow] duration-300 ease-fluid",
+          collapsed ? "w-[72px] shadow-soft" : "w-64 shadow-float",
+        )}
+      >
+        <div className={cn("flex h-16 shrink-0 items-center px-6", collapsed && "justify-center px-0")}>
           {collapsed ? <ZentraMark /> : <ZentraLogo />}
         </div>
-        <div className="scrollbar-slim flex-1 overflow-y-auto py-3">
-          <NavList collapsed={collapsed} />
+        <div className="scrollbar-slim flex-1 overflow-y-auto overflow-x-hidden py-3">
+          <NavList collapsed={collapsed} onNavigate={desktop ? undefined : () => setOpen(false)} />
         </div>
-        <div className={cn("px-3", collapsed && "flex justify-center")}>
-          <button
-            onClick={toggle}
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className={cn(
-              "flex h-10 items-center gap-3 rounded-xl px-3 text-sm text-muted-foreground transition-colors duration-200 hover:bg-muted/50 hover:text-foreground [&_svg]:size-[18px]",
-              collapsed && "w-10 justify-center px-0",
-            )}
-          >
-            <PanelLeft className={cn("transition-transform duration-300 ease-fluid", collapsed && "rotate-180")} />
-            {!collapsed && "Collapse"}
-          </button>
-        </div>
-        <div className={cn("m-3 flex items-center gap-2.5 rounded-2xl bg-muted px-3 py-2.5 text-xs text-muted-foreground", collapsed && "justify-center px-0")}>
+        {!desktop && (
+          <div className={cn("px-3", collapsed && "flex justify-center")}>
+            <button
+              onClick={() => setOpen((o) => !o)}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              aria-expanded={!collapsed}
+              className={cn(
+                "flex h-11 items-center gap-3 rounded-xl px-3 text-sm text-muted-foreground transition-colors duration-200 hover:bg-muted/50 hover:text-foreground [&_svg]:size-[18px]",
+                collapsed && "w-11 justify-center px-0",
+              )}
+            >
+              <PanelLeft className={cn("transition-transform duration-300 ease-fluid", collapsed && "rotate-180")} />
+              {!collapsed && "Collapse"}
+            </button>
+          </div>
+        )}
+        <div className={cn("m-3 flex shrink-0 items-center gap-2.5 rounded-2xl bg-muted px-3 py-2.5 text-xs text-muted-foreground", collapsed && "justify-center px-0")}>
           <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-card text-primary shadow-soft"><ShieldCheck className="h-3.5 w-3.5" /></span>
           {!collapsed && (
             <span className="min-w-0 leading-tight">
@@ -341,6 +370,22 @@ export function AppShell() {
           )}
         </div>
       </aside>
+    </div>
+  );
+}
+
+export function AppShell() {
+  const me = useMe();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  // Each page starts at the top, so its entrance animation is visible.
+  useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [path]);
+  if (!me) return null;
+
+  return (
+    <div className="flex min-h-full">
+      {/* min-h-full (not h-full) lets the page grow past the viewport, so the sidebar stays put while scrolling. */}
+      <Sidebar />
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent className="safe-top flex flex-col p-0">
@@ -353,8 +398,8 @@ export function AppShell() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="safe-top sticky top-0 z-30 bg-background/80 backdrop-blur-md">
-          <div className="flex h-14 items-center gap-2 px-4 sm:px-6 lg:mt-3">
-            <Button variant="ghost" size="icon" className="-ml-2 lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
+          <div className="flex h-14 items-center gap-2 px-4 sm:px-6 md:mt-3">
+            <Button variant="ghost" size="icon" className="-ml-2 md:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
               <Menu />
             </Button>
             <TitleBar />

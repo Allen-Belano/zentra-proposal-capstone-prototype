@@ -371,7 +371,7 @@ export function PipelinePage() {
                   <TableHead className="text-right">Saved</TableHead>
                   <TableHead className="hidden text-right sm:table-cell">Needs fixing</TableHead>
                   <TableHead className="hidden sm:table-cell">Status</TableHead>
-                  <TableHead className="hidden md:table-cell">Started</TableHead>
+                  <TableHead className="hidden lg:table-cell">Started</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -391,7 +391,7 @@ export function PipelinePage() {
                     </TableCell>
                     <TableCell className={cn("hidden text-right tabular sm:table-cell", r.rejected > 0 && "text-warning")}>{r.rejected}</TableCell>
                     <TableCell className="hidden sm:table-cell"><RunStatus run={r} /></TableCell>
-                    <TableCell className="hidden whitespace-nowrap text-muted-foreground md:table-cell">{formatDateTime(r.startedAt)}</TableCell>
+                    <TableCell className="hidden whitespace-nowrap text-muted-foreground lg:table-cell">{formatDateTime(r.startedAt)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

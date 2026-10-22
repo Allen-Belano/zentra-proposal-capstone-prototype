@@ -624,8 +624,8 @@ export const useApp = create<AppState>()(
       };
     },
     {
-      // v3: module owners, adapter connections, and field mappings. Older saved demos start fresh.
-      name: "zentra-demo-v4",
+      // v5: three demo orders. Older saved demos start fresh.
+      name: "zentra-demo-v5",
       storage: createJSONStorage(() => {
         try {
           localStorage.setItem("__t", "1");

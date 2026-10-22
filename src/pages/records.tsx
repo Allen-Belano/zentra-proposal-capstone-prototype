@@ -22,7 +22,7 @@ import { useApp, useMe, waitForSync } from "@/store/app-store";
 
 // With the sidebar open, a 1280px laptop leaves about as much room as a tablet, so tablet-hidden columns wait for xl.
 const hideCls = (f: ModuleField) =>
-  cn(f.hideOnTablet ? "hidden xl:table-cell" : f.hideOnMobile && "hidden md:table-cell");
+  cn(f.hideOnTablet ? "hidden xl:table-cell" : f.hideOnMobile && "hidden lg:table-cell");
 
 function Cell({ field, rec }: { field: ModuleField; rec: RecordItem }) {
   const v = rec.data[field.key];
@@ -46,14 +46,14 @@ function Cell({ field, rec }: { field: ModuleField; rec: RecordItem }) {
         to="/orders/$orderId"
         params={{ orderId: rec.id }}
         onClick={(e) => e.stopPropagation()}
-        className="font-medium text-primary underline-offset-4 hover:underline"
+        className="whitespace-nowrap font-medium text-primary underline-offset-4 hover:underline"
       >
         {String(v)}
       </Link>
     );
   }
   if (field.type === "number") return <span className="tabular">{String(v)}</span>;
-  return <span className={cn("block max-w-[8rem] truncate whitespace-nowrap xl:max-w-[16rem]", field.primary && "font-medium")} title={String(v)}>{String(v)}</span>;
+  return <span className={cn("block max-w-[8rem] truncate whitespace-nowrap xl:max-w-[12rem]", field.primary && "font-medium")} title={String(v)}>{String(v)}</span>;
 }
 
 export function RecordsPage() {
@@ -202,7 +202,7 @@ export function RecordsPage() {
                       <TableHead key={f.key} className={hideCls(f)}>{f.label}</TableHead>
                     ))}
                     {external && <TableHead className="hidden xl:table-cell">Bitrix24</TableHead>}
-                    <TableHead className="hidden xl:table-cell">Updated</TableHead>
+                    <TableHead className="hidden 2xl:table-cell">Updated</TableHead>
                     <TableHead className="w-10"><span className="sr-only">Actions</span></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -217,8 +217,8 @@ export function RecordsPage() {
                         <TableCell key={f.key} className={hideCls(f)}><Cell field={f} rec={r} /></TableCell>
                       ))}
                       {external && <TableCell className="hidden xl:table-cell"><SyncBadge state={r.syncState} /></TableCell>}
-                      <TableCell className="hidden whitespace-nowrap text-muted-foreground xl:table-cell">
-                        <div className="text-sm">{timeAgo(r.updatedAt)}</div>
+                      <TableCell className="hidden whitespace-nowrap text-muted-foreground 2xl:table-cell">
+                        <div>{timeAgo(r.updatedAt)}</div>
                         <div className="text-xs">{r.updatedBy}</div>
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>{actions(r)}</TableCell>
