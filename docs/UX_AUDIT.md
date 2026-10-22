@@ -42,8 +42,8 @@ progress track.
 
 | Stored value (`ORDER_STAGES`) | Displayed | Track position |
 |---|---|---|
-| `Credit check` | Credit check | 1 |
-| `On hold` | On hold | 1 (sub-state of Credit check) |
+| `Accounting` | Accounting | 1 |
+| `On hold` | On hold | 1 (sub-state of Accounting) |
 | `Purchasing` | Purchasing | 2 |
 | `Order basis` | Waiting for supplier | 2 (sub-state of Purchasing) |
 | `Receiving` | Receiving | 3 |
@@ -61,8 +61,8 @@ label changes.
 
 | Key | Displayed | Input label |
 |---|---|---|
-| `clientPo` | Client purchase order (PO) | Client PO number |
-| `supplierPo` | Supplier purchase order (PO) | Supplier PO number |
+| `clientPo` | Supplier P.O | Supplier P.O number |
+| `supplierPo` | Vendor P.O | Vendor P.O number |
 | `rr` | Receiving report (RR) | Receiving report number |
 | `si` | Sales invoice (SI) | Sales invoice number |
 | `wr` | Sales report (WR) | Sales report number |

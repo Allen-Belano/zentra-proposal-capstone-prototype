@@ -13,8 +13,8 @@ const HOUR = 3_600_000;
 
 /** Target time to finish a step once an order reaches it, per role. */
 export const TARGET_HOURS: Record<Position, number> = {
-  accounting: 24,  // credit check or payment follow-up within a day
-  purchasing: 24,  // reserve stock or raise the supplier PO within a day
+  accounting: 24,  // clearing an order or following up a payment within a day
+  purchasing: 24,  // reserve stock or raise the vendor P.O within a day
   inventory: 72,   // supplier deliveries can take a few days to arrive and be received
   invoicing: 24,   // SI and WR within a day of receiving
   delivery: 48,    // delivered within two days of invoicing
@@ -23,7 +23,7 @@ export const TARGET_HOURS: Record<Position, number> = {
 /** The role-specific measure shown alongside the shared KPIs. */
 export const ROLE_METRIC: Record<Position, { label: string; hint: string; match: (e: OrderLogEntry) => boolean }> = {
   accounting: { label: "Payments collected", hint: "Official receipts recorded", match: (e) => /^Payment (collected|received)/.test(e.description) },
-  purchasing: { label: "Supplier POs issued", hint: "Including order-basis POs", match: (e) => e.description.startsWith("Supplier PO") },
+  purchasing: { label: "Vendor P.Os issued", hint: "Including order-basis POs", match: (e) => e.description.startsWith("Vendor P.O") },
   inventory: { label: "Receiving reports posted", hint: "Supplier deliveries received", match: (e) => e.description.includes("receiving report") },
   invoicing: { label: "Sales invoices issued", hint: "SI and WR pairs", match: (e) => e.description.startsWith("Sales invoice") },
   delivery: { label: "Deliveries completed", hint: "Signed delivery receipts", match: (e) => e.description.startsWith("Items delivered") },

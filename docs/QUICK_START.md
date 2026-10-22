@@ -22,8 +22,8 @@ Go to http://localhost:5173 and click your account. The password for every accou
 
 | Role | You handle | Your button |
 |---|---|---|
-| **Accounting** | Credit checks and payments | **Clear credit check**, **Put on hold**, **Record payment** |
-| **Purchasing** | Buying missing items | **Reserve from stock**, **Issue supplier PO** |
+| **Accounting** | Order clearing and payments | **Clear the order**, **Put on hold**, **Record payment** |
+| **Purchasing** | Buying missing items | **Reserve from stock**, **Issue vendor P.O** |
 | **Inventory** | Supplier deliveries and stock | **Post receiving report**. Only you can add or edit inventory items. |
 | **Invoicing** | Sales invoices | **Issue sales invoice and report** |
 | **Delivery** | Getting items to the client | **Record delivery** |
@@ -43,7 +43,7 @@ That's it. The order moves to the next role, that role gets notified, and a mess
 
 ## 4. The order stages
 
-**Credit check** (Accounting) → **Purchasing** (Purchasing) → **Receiving** (Inventory) → **Invoicing** (Invoicing) → **Delivery** (Delivery) → **Payment** (Accounting) → **Completed**
+**Accounting** (Accounting) → **Purchasing** (Purchasing) → **Receiving** (Inventory) → **Invoicing** (Invoicing) → **Delivery** (Delivery) → **Collection** (Accounting) → **Collection done**
 
 - **On hold**: the client owes money. Accounting releases the order once it's paid.
 - **From stock**: Purchasing found everything in stock, so Receiving is skipped.

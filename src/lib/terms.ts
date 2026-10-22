@@ -9,7 +9,7 @@ import type { OrderDocs } from "./types";
 
 /** The six stages of an order, in the order they happen. */
 export const STAGE_TRACK = [
-  "Credit check", "Purchasing", "Receiving", "Invoicing", "Delivery", "Collection",
+  "Accounting", "Purchasing", "Receiving", "Invoicing", "Delivery", "Collection",
 ] as const;
 
 /**
@@ -18,7 +18,7 @@ export const STAGE_TRACK = [
  * stage they belong to.
  */
 export const STAGE_LABEL: Record<OrderStage, string> = {
-  "Credit check": "Credit check",
+  Accounting: "Accounting",
   "On hold": "On hold",
   Purchasing: "Purchasing",
   "Order basis": "Waiting for supplier",
@@ -31,7 +31,7 @@ export const STAGE_LABEL: Record<OrderStage, string> = {
 
 /** The stage a sub-state belongs to, for the progress track. */
 export const STAGE_TRACK_OF: Record<OrderStage, number> = {
-  "Credit check": 0,
+  Accounting: 0,
   "On hold": 0,
   Purchasing: 1,
   "Order basis": 1,
@@ -47,8 +47,8 @@ export const stageLabel = (stage: string) => STAGE_LABEL[stage as OrderStage] ??
 
 /** The documents produced along the order flow, and the label for each. */
 export const DOC_LABEL: Record<keyof OrderDocs, string> = {
-  clientPo: "Client purchase order (PO)",
-  supplierPo: "Supplier purchase order (PO)",
+  clientPo: "Supplier P.O",
+  supplierPo: "Vendor P.O",
   rr: "Receiving report (RR)",
   si: "Sales invoice (SI)",
   wr: "Sales report (WR)",
@@ -58,8 +58,8 @@ export const DOC_LABEL: Record<keyof OrderDocs, string> = {
 
 /** The label for the number field of a document, e.g. "Sales invoice number". */
 export const DOC_INPUT_LABEL: Record<keyof OrderDocs, string> = {
-  clientPo: "Client PO number",
-  supplierPo: "Supplier PO number",
+  clientPo: "Supplier P.O number",
+  supplierPo: "Vendor P.O number",
   rr: "Receiving report number",
   si: "Sales invoice number",
   wr: "Sales report number",
@@ -79,11 +79,11 @@ export const TERM_HELP = {
   keyNumbers: "Measures that show how the work is going, such as how many orders were finished on time.",
   connection: "How Zentra connects to another system.",
   pipeline: "For files you upload and data from connected apps.",
-  stage: "One of the six stages an order goes through, from credit check to payment.",
+  stage: "One of the six stages an order goes through, from Accounting to Collection.",
 } as const;
 
 /** A one-line definition for a module, used in help text and empty states. */
 export const MODULE_HELP = {
   inventory: "Stock levels, reorder points, and storage locations.",
-  operations: "Orders from won Bitrix24 deals, from credit check to payment.",
+  operations: "Orders from won Bitrix24 deals, from Accounting to Collection.",
 } as const;

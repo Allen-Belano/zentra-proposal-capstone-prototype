@@ -198,7 +198,7 @@ export const useApp = create<AppState>()(
             log: [logEntry(String(clean.stage), description, fromBitrix ? "Bitrix24" : me())],
           };
           const no = String(clean.order_no);
-          notify({ position: "accounting" }, `${no} needs a credit check`, `New order from ${clean.customer || "a client"}`, rec.id, "operations");
+          notify({ position: "accounting" }, `${no} is ready for Accounting`, `New order from ${clean.customer || "a client"}`, rec.id, "operations");
         }
         set((s) => ({ records: [rec, ...s.records] }));
         return rec;
@@ -624,8 +624,8 @@ export const useApp = create<AppState>()(
       };
     },
     {
-      // v5: three demo orders. Older saved demos start fresh.
-      name: "zentra-demo-v5",
+      // v6: renamed terms (Accounting stage, Supplier P.O, Vendor P.O). Older saved demos start fresh.
+      name: "zentra-demo-v6",
       storage: createJSONStorage(() => {
         try {
           localStorage.setItem("__t", "1");

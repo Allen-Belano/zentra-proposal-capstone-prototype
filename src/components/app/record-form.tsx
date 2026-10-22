@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { stageLabel } from "@/lib/terms";
 import type { ModuleDef } from "@/lib/types";
 
 type Row = Record<string, string | number>;
@@ -65,7 +66,7 @@ export function RecordForm({
                 {f.type === "select" && f.options ? (
                   <Select value={String(values[f.key] ?? "")} onValueChange={(v) => setValues((s) => ({ ...s, [f.key]: v }))}>
                     <SelectTrigger id={`f-${f.key}`}><SelectValue placeholder={`Choose ${f.label.toLowerCase()}`} /></SelectTrigger>
-                    <SelectContent>{f.options.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}</SelectContent>
+                    <SelectContent>{f.options.map((o) => <SelectItem key={o} value={o}>{f.key === "stage" ? stageLabel(o) : o}</SelectItem>)}</SelectContent>
                   </Select>
                 ) : (
                   <Input

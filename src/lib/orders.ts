@@ -3,17 +3,17 @@ import { DOC_INPUT_LABEL, STAGE_TRACK, STAGE_TRACK_OF } from "./terms";
 
 /**
  * The Operations order flow from the iFixz business process board. An order enters at
- * "Credit check" when the deal is won in Bitrix24, and each stage is owned by one position.
+ * "Accounting" when the deal is won in Bitrix24, and each stage is owned by one position.
  */
 export const ORDER_STAGES = [
-  "Credit check", "On hold", "Purchasing", "Order basis", "Receiving", "Invoicing", "Delivery", "Collection", "Done",
+  "Accounting", "On hold", "Purchasing", "Order basis", "Receiving", "Invoicing", "Delivery", "Collection", "Done",
 ] as const;
 export type OrderStage = (typeof ORDER_STAGES)[number];
 
 export const PAYMENT_STATUSES = ["Unpaid", "Paid"] as const;
 
 export const STAGE_INFO: Record<OrderStage, { owner?: Position; pending: string }> = {
-  "Credit check": { owner: "accounting", pending: "Check the client's balance and clear the order" },
+  "Accounting": { owner: "accounting", pending: "Check the client's balance and clear the order" },
   "On hold": { owner: "accounting", pending: "Wait for the client to settle their old balance" },
   Purchasing: { owner: "purchasing", pending: "Check stock and buy any missing items" },
   "Order basis": { owner: "purchasing", pending: "Follow up with the supplier until the items arrive" },
@@ -42,19 +42,19 @@ export interface OrderAction {
 
 export const ORDER_ACTIONS: OrderAction[] = [
   {
-    id: "clear-credit", stage: "Credit check", primary: true, label: "Clear credit check",
+    id: "clear-credit", stage: "Accounting", primary: true, label: "Clear the order",
     hint: "The client has no unpaid balance.", next: () => "Purchasing",
-    describe: () => "Credit check cleared: no unpaid balance",
+    describe: () => "Cleared by Accounting: no unpaid balance",
   },
   {
-    id: "hold", stage: "Credit check", label: "Put on hold",
+    id: "hold", stage: "Accounting", label: "Put on hold",
     hint: "The client still has an unpaid balance.", next: () => "On hold",
     describe: () => "Put on hold: the client has an unpaid balance",
   },
   {
     id: "release", stage: "On hold", primary: true, label: "Balance settled",
     hint: "The client paid the old balance.", next: () => "Purchasing",
-    describe: () => "Client settled the old balance, so the credit check is cleared",
+    describe: () => "Client settled the old balance, so Accounting cleared the order",
   },
   {
     id: "reserve", stage: "Purchasing", primary: true, label: "Reserve from stock",
@@ -62,16 +62,16 @@ export const ORDER_ACTIONS: OrderAction[] = [
     describe: () => "All items reserved from stock",
   },
   {
-    id: "supplier-po", stage: "Purchasing", label: "Issue supplier PO",
+    id: "supplier-po", stage: "Purchasing", label: "Issue vendor P.O",
     hint: "Buy the missing items from a supplier.", next: () => "Receiving",
     docs: [{ key: "supplierPo", label: DOC_INPUT_LABEL.supplierPo, prefix: "SPO-" }],
-    describe: (d) => `Supplier PO ${d.supplierPo} issued for the missing items`,
+    describe: (d) => `Vendor P.O ${d.supplierPo} issued for the missing items`,
   },
   {
     id: "order-basis", stage: "Purchasing", label: "Wait for supplier",
     hint: "Items are hard to source, so the order waits for the supplier.", next: () => "Order basis",
     docs: [{ key: "supplierPo", label: DOC_INPUT_LABEL.supplierPo, prefix: "SPO-" }],
-    describe: (d) => `Supplier PO ${d.supplierPo} issued; the order waits for the supplier (long lead time)`,
+    describe: (d) => `Vendor P.O ${d.supplierPo} issued; the order waits for the supplier (long lead time)`,
   },
   {
     id: "arrived", stage: "Order basis", primary: true, label: "Supplier items arrived",
