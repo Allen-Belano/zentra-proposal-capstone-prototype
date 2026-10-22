@@ -373,7 +373,15 @@ function Sidebar() {
 
 export function AppShell() {
   const me = useMe();
+  const checkOverdue = useApp((s) => s.checkOverdue);
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Stands in for the scheduled job of the real build: alert on orders that pass their delivery limit.
+  useEffect(() => {
+    if (!me) return;
+    checkOverdue();
+    const t = window.setInterval(checkOverdue, 60_000);
+    return () => window.clearInterval(t);
+  }, [me?.id, checkOverdue]);
   const path = useRouterState({ select: (s) => s.location.pathname });
   // Each page starts at the top, so its entrance animation is visible.
   useEffect(() => { window.scrollTo({ top: 0, behavior: "instant" }); }, [path]);

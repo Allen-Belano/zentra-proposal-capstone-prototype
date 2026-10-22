@@ -40,7 +40,7 @@ export const WIDGETS: WidgetDef[] = [
   { id: "stat-in-progress", kind: "stat", label: "Orders in progress", hint: "Open orders and how many are on track" },
   { id: "stat-completed", kind: "stat", label: "Completed this month", hint: "Delivered and paid" },
   { id: "stat-awaiting", kind: "stat", label: "Awaiting payment", hint: "Delivered, unpaid, and the money owed to us" },
-  { id: "stat-delayed", kind: "stat", label: "Delayed orders", hint: "Past due, on hold, or stuck" },
+  { id: "stat-delayed", kind: "stat", label: "Delayed orders", hint: "Past the delivery limit, or on hold" },
   { id: "stat-invoiced", kind: "stat", label: "Invoiced this month", hint: "" },
   { id: "stat-ontime", kind: "stat", label: "On-time deliveries", hint: "" },
   { id: "stat-overdue", kind: "stat", label: "Overdue deliveries", hint: "Delivered past the time limit" },

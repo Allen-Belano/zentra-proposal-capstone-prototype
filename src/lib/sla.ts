@@ -57,3 +57,29 @@ export function purchasingToDeliveryDays(rec: RecordItem): number | null {
   const sla = slaOf(rec);
   return sla?.deliveredAt ? (new Date(sla.deliveredAt).getTime() - new Date(sla.startedAt).getTime()) / DAY : null;
 }
+
+/**
+ * Overdue is time-based: past the limit is overdue. A valid reason doesn't cancel it, it
+ * explains it. On track is grey, overdue with a reason is orange, overdue with none is red.
+ */
+export type OverdueState = "on_track" | "justified" | "overdue";
+
+/** The reason on record for running past the limit: one staff reported, or hard to source. */
+export function overdueReasonOf(rec: RecordItem): string | null {
+  const reported = rec.order?.log.filter((e) => e.delay).at(-1);
+  if (reported) return `Outside our control: ${reported.note ?? "reported by staff"}`;
+  return slaOf(rec)?.hardToSource ? "Hard to source: the order waited for the supplier" : null;
+}
+
+export function overdueStateOf(rec: RecordItem, now = Date.now()): OverdueState | null {
+  const sla = slaOf(rec, now);
+  if (!sla) return null;
+  if (!sla.late) return "on_track";
+  return overdueReasonOf(rec) ? "justified" : "overdue";
+}
+
+/** Past the limit and still not delivered: the orders the overdue check alerts on. */
+export const isOpenOverdue = (rec: RecordItem, now = Date.now()) => {
+  const sla = slaOf(rec, now);
+  return !!sla && sla.late && !sla.deliveredAt && rec.data.stage !== "Done";
+};

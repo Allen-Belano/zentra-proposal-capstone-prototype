@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { EmptyState, PageHeader, PaymentBadge, StageBadge, SyncBadge } from "@/components/app/bits";
+import { EmptyState, OverdueBadge, PageHeader, PaymentBadge, StageBadge, SyncBadge } from "@/components/app/bits";
 import { delayReason, STAGE_INFO, type OrderStage } from "@/lib/orders";
 import { slaOf } from "@/lib/sla";
 import { moduleAccess, POSITION_LABEL, POSITIONS } from "@/lib/rbac";
@@ -36,7 +36,8 @@ function OrderCard({ o }: { o: RecordItem }) {
           <div className="mt-0.5 text-sm text-muted-foreground">{o.data.items}</div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {delay && <Badge variant="warning">{delay}</Badge>}
+          {stage === "On hold" && delay && <Badge variant="warning">{delay}</Badge>}
+          <OverdueBadge rec={o} />
           <StageBadge stage={stage} />
           <PaymentBadge status={String(o.data.payment)} />
           <SyncBadge state={o.syncState} />

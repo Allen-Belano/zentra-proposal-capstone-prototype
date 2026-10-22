@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LevelDot, Money, PageHeader, StageBadge, StatCard } from "@/components/app/bits";
+import { LevelDot, Money, OverdueBadge, PageHeader, StageBadge, StatCard } from "@/components/app/bits";
 import { DatePicker, MonthPicker } from "@/components/app/date-picker";
 import { delayReason, STAGE_INFO, type OrderStage } from "@/lib/orders";
 import { purchasingToDeliveryDays, SLA_DAYS, slaOf } from "@/lib/sla";
@@ -412,7 +412,7 @@ function WaitingOnYou({ className }: { className?: string }) {
           <p className="flex items-center gap-2 rounded-xl bg-success/5 px-3 py-2.5 text-sm text-success"><CheckCircle2 className="h-4 w-4" />Nothing is waiting on you right now</p>
         ) : (
           <div className="flex flex-col gap-0.5">
-            {mine.map((o) => <OrderRow key={o.id} o={o} warning={delayReason(o)} extra={<StageBadge stage={String(o.data.stage)} />} />)}
+            {mine.map((o) => <OrderRow key={o.id} o={o} warning={delayReason(o)} extra={<span className="flex flex-wrap justify-end gap-1.5"><OverdueBadge rec={o} compact /><StageBadge stage={String(o.data.stage)} /></span>} />)}
           </div>
         )}
       </CardContent>

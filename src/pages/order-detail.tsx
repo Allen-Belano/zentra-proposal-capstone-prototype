@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useParams } from "@tanstack/react-router";
-import { ArrowLeft, Check, CircleDot, Clock, FileText, Hourglass } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, CircleDot, Clock, FileText, Hourglass } from "lucide-react";
 import { toast } from "sonner";
 import { confirmAction } from "@/components/app/confirm";
 import { Badge } from "@/components/ui/badge";
@@ -9,10 +9,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Money, PageHeader, PaymentBadge, StageBadge, SyncBadge } from "@/components/app/bits";
+import { Textarea } from "@/components/ui/textarea";
+import { Money, OverdueBadge, PageHeader, PaymentBadge, StageBadge, SyncBadge } from "@/components/app/bits";
 import { Forbidden } from "@/components/app/guard";
 import { actionOwner, actionsFor, delayReason, STAGE_INFO, TRACK, trackIndex, type OrderAction, type OrderStage } from "@/lib/orders";
-import { slaOf } from "@/lib/sla";
+import { overdueReasonOf, overdueStateOf, slaOf } from "@/lib/sla";
 import { canActAs, moduleAccess, POSITION_LABEL, ROLE_LABEL } from "@/lib/rbac";
 import { DOC_LABEL, stageLabel } from "@/lib/terms";
 import type { OrderDocs, OrderLogEntry, RecordItem } from "@/lib/types";
@@ -126,14 +127,60 @@ function ActionDialog({ rec, action, onClose }: { rec: RecordItem; action: Order
   );
 }
 
+/** The stage owner explains why an order is running late. The note goes into the order's history. */
+function ReportDelayDialog({ rec, open, onOpenChange }: { rec: RecordItem; open: boolean; onOpenChange: (o: boolean) => void }) {
+  const reportDelay = useApp((s) => s.reportDelay);
+  const [note, setNote] = useState("");
+  const [errors, setErrors] = useState<string[]>([]);
+  const close = () => { setNote(""); setErrors([]); onOpenChange(false); };
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const r = reportDelay(rec.id, note);
+    if (!r.ok) return setErrors(r.errors ?? ["Couldn't save the delay."]);
+    toast.success(`Delay reported on ${rec.data.order_no}`, { description: "It's in the order's history, and the Operations Department Head is notified." });
+    close();
+  };
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) close(); }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Report a delay on {String(rec.data.order_no)}</DialogTitle>
+          <DialogDescription>
+            Use this when the delay is outside our control. The order still counts as overdue, but it shows as justified (orange) instead of red.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={submit} className="grid gap-4">
+          {errors.length > 0 && (
+            <ul role="alert" className="list-disc rounded-xl border border-destructive/40 bg-destructive/10 p-3 pl-7 text-sm text-destructive">
+              {errors.map((e) => <li key={e}>{e}</li>)}
+            </ul>
+          )}
+          <div className="grid gap-2">
+            <Label htmlFor="delay-note">What's causing the delay?</Label>
+            <Textarea id="delay-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="For example: the supplier's truck broke down; delivery moved to Friday." maxLength={240} />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={close}>Cancel</Button>
+            <Button type="submit">Report delay</Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function NextStep({ rec }: { rec: RecordItem }) {
   const me = useMe();
   const users = useApp((s) => s.users);
   const advanceOrder = useApp((s) => s.advanceOrder);
   const [pending, setPending] = useState<OrderAction | null>(null);
+  const [reporting, setReporting] = useState(false);
   const stage = rec.data.stage as OrderStage;
   const info = STAGE_INFO[stage];
-  const delay = delayReason(rec);
+  const onHold = stage === "On hold" ? delayReason(rec) : null;
+  const overdue = overdueStateOf(rec);
+  const reason = overdueReasonOf(rec);
+  const sla = slaOf(rec);
 
   if (stage === "Done") {
     const closed = rec.order?.log.at(-1)?.at;
@@ -154,6 +201,8 @@ function NextStep({ rec }: { rec: RecordItem }) {
   const assignees = users.filter((u) => u.role === "employee" && u.status === "active" && u.position === owner).map((u) => u.name);
   const actions = actionsFor(rec);
   const mine = actions.filter((a) => canActAs(me, actionOwner(rec, a)));
+  // Any overdue order, or a hard-to-source one, can get a note from its stage owner.
+  const canReport = canActAs(me, owner) && !!sla && (sla.late || sla.hardToSource);
   const run = async (a: OrderAction) => {
     if (a.docs?.length) return setPending(a);
     if (!(await confirmAction({ title: `${a.label}?`, description: `${rec.data.order_no} · ${a.hint} ${outcome(rec, a)}`, confirmLabel: a.label }))) return;
@@ -171,7 +220,7 @@ function NextStep({ rec }: { rec: RecordItem }) {
   };
 
   return (
-    <Card className={cn("p-5", delay && "border-warning/40")}>
+    <Card className={cn("p-5", overdue === "overdue" ? "border-destructive/40" : (overdue === "justified" || onHold) && "border-warning/40")}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-start gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary/10 text-primary"><Hourglass className="h-5 w-5" /></span>
@@ -181,14 +230,26 @@ function NextStep({ rec }: { rec: RecordItem }) {
               {assignees.length > 0 && <> · {assignees.join(", ")}</>}
             </p>
             <p className="font-medium">{info.pending}</p>
-            {delay && <Badge variant="warning" className="mt-1.5 whitespace-normal">{delay}</Badge>}
+            {onHold && <Badge variant="warning" className="mt-1.5 whitespace-normal">{onHold}</Badge>}
+            {sla && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                <OverdueBadge rec={rec} />
+                <span>
+                  {sla.deliveredAt
+                    ? `Delivered ${formatDate(sla.deliveredAt)}; the limit was ${formatDate(sla.deadline)}.`
+                    : `Deliver by ${formatDate(sla.deadline)} (${sla.days} days from Purchasing${sla.hardToSource ? ", hard to source" : ""}).`}
+                </span>
+              </div>
+            )}
+            {sla?.late && <p className="mt-1.5 text-sm"><span className="font-medium">Reason:</span> <span className="text-muted-foreground">{reason ?? "None recorded yet."}</span></p>}
           </div>
         </div>
-        {mine.length > 0 ? (
+        {mine.length > 0 || canReport ? (
           <div className="flex flex-wrap gap-2">
             {mine.map((a) => (
               <Button key={a.id} variant={a.primary ? "default" : "outline"} onClick={() => run(a)} title={a.hint}>{a.label}</Button>
             ))}
+            {canReport && <Button variant="outline" onClick={() => setReporting(true)} title="Record a delay that's outside our control"><AlertTriangle />Report delay</Button>}
           </div>
         ) : (
           <p className="text-sm text-muted-foreground lg:max-w-xs lg:text-right">
@@ -197,6 +258,7 @@ function NextStep({ rec }: { rec: RecordItem }) {
         )}
       </div>
       <ActionDialog rec={rec} action={pending} onClose={() => setPending(null)} />
+      <ReportDelayDialog rec={rec} open={reporting} onOpenChange={setReporting} />
     </Card>
   );
 }
@@ -213,12 +275,15 @@ export function OrderTimeline({ rec }: { rec: RecordItem }) {
       {log.map((e, i) => (
         <li key={e.id} className="relative flex gap-4 pb-6 last:pb-0">
           {(i < log.length - 1 || open) && <span aria-hidden className="absolute left-[15px] top-8 h-[calc(100%-2rem)] w-px bg-border" />}
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-success/10 text-success"><Check className="h-4 w-4" /></span>
+          {e.delay
+            ? <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-warning/10 text-warning"><AlertTriangle className="h-4 w-4" /></span>
+            : <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-success/10 text-success"><Check className="h-4 w-4" /></span>}
           <div className="min-w-0 flex-1 pt-1">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
               <p className="text-sm font-medium">{e.description}</p>
-              <Badge variant="success" className="w-fit shrink-0">Done</Badge>
+              {e.delay ? <Badge variant="warning" className="w-fit shrink-0">Delay</Badge> : <Badge variant="success" className="w-fit shrink-0">Done</Badge>}
             </div>
+            {e.note && <p className="mt-1 text-sm text-muted-foreground">"{e.note}"</p>}
             <p className="mt-1 text-xs text-muted-foreground">
               <span className="font-medium text-foreground">{e.by}</span> · {whoLabel(e)} · {formatDateTime(e.at)}
             </p>
@@ -234,7 +299,7 @@ export function OrderTimeline({ rec }: { rec: RecordItem }) {
           <div className="min-w-0 flex-1 pt-1">
             <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
               <p className="text-sm font-medium">{stageLabel(stage)}: {STAGE_INFO[stage].pending.toLowerCase()}</p>
-              <Badge variant={stage === "On hold" ? "destructive" : "default"} className="w-fit shrink-0">{stage === "On hold" ? "On hold" : "In progress"}</Badge>
+              <Badge variant={stage === "On hold" ? "warning" : "default"} className="w-fit shrink-0">{stage === "On hold" ? "On hold" : "In progress"}</Badge>
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               <span className="font-medium text-foreground">{owner ? POSITION_LABEL[owner] : "—"}</span>
@@ -267,7 +332,7 @@ export function OrderDetailPage() {
       <PageHeader
         title={String(rec.data.order_no)}
         description={`${rec.data.customer} · ${rec.data.items}`}
-        actions={<><StageBadge stage={String(rec.data.stage)} /><PaymentBadge status={String(rec.data.payment)} /><SyncBadge state={rec.syncState} /></>}
+        actions={<><OverdueBadge rec={rec} /><StageBadge stage={String(rec.data.stage)} /><PaymentBadge status={String(rec.data.payment)} /><SyncBadge state={rec.syncState} /></>}
       />
       <div className="grid gap-4">
         <NextStep rec={rec} />

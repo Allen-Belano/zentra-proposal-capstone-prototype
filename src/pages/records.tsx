@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useSyncNowToast } from "@/components/app/app-shell";
-import { EmptyState, Money, PageHeader, PaymentBadge, StageBadge, SyncBadge, useCanSeeMoney } from "@/components/app/bits";
+import { EmptyState, Money, OverdueBadge, PageHeader, PaymentBadge, StageBadge, SyncBadge, useCanSeeMoney } from "@/components/app/bits";
 import { Forbidden } from "@/components/app/guard";
 import { confirmAction } from "@/components/app/confirm";
 import { RecordForm } from "@/components/app/record-form";
@@ -54,7 +54,9 @@ function Cell({ field, rec }: { field: ModuleField; rec: RecordItem }) {
   if (field.type === "currency") return <Money value={v} />;
   if (field.key === "due_date" && rec.order) {
     const sla = slaOf(rec);
-    return sla ? <span className="whitespace-nowrap">{formatDate(sla.deadline)}</span> : <span className="text-muted-foreground">—</span>;
+    return sla
+      ? <span className="flex flex-wrap items-center gap-1.5 whitespace-nowrap">{formatDate(sla.deadline)}<OverdueBadge rec={rec} /></span>
+      : <span className="text-muted-foreground">—</span>;
   }
   if (field.type === "date") return <span className="whitespace-nowrap">{formatDate(String(v))}</span>;
   if (field.key === "on_hand") {

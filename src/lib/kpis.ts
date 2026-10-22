@@ -38,7 +38,7 @@ export function completedSteps(orders: RecordItem[]): StepDone[] {
   for (const order of orders) {
     const log = order.order?.log ?? [];
     log.forEach((entry, i) => {
-      if (i === 0 || entry.role !== "employee" || !entry.position) return;
+      if (i === 0 || entry.role !== "employee" || !entry.position || entry.delay) return;
       out.push({ entry, order, hours: (new Date(entry.at).getTime() - new Date(log[i - 1].at).getTime()) / HOUR });
     });
   }

@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { makeSeed } from "@/data/seed";
-import { actionOwner, actionsFor, ORDER_ACTIONS, type OrderStage } from "@/lib/orders";
+import { actionOwner, actionsFor, ORDER_ACTIONS, STAGE_INFO, type OrderStage } from "@/lib/orders";
+import { isOpenOverdue, overdueReasonOf, slaOf } from "@/lib/sla";
 import { can, canActAs, canExport, canViewFinancials, moduleAccess, POSITION_LABEL } from "@/lib/rbac";
 import { recordLabel, transformRow, validateRow } from "@/lib/validation";
 import { stageLabel } from "@/lib/terms";
@@ -47,6 +48,9 @@ interface AppState extends Omit<Seed, "backupSchedule"> {
   updateRecord: (recordId: string, data: Row) => Result;
   setArchived: (recordId: string, archived: boolean) => Result;
   logExport: (moduleId: string, count: number) => void;
+  reportDelay: (recordId: string, note: string) => Result;
+  /** Alerts on orders that just passed their delivery limit. Runs on load and every minute. */
+  checkOverdue: () => void;
   advanceOrder: (recordId: string, actionId: string, docs: Partial<Record<keyof OrderDocs, string>>) => Result;
 
   runPipeline: (moduleId: string, source: string, rows: Row[]) => PipelineRun;
@@ -302,6 +306,43 @@ export const useApp = create<AppState>()(
         logExport: (moduleId, count) => {
           if (!canExport(me())) return;
           audit("Exported a CSV file", `${mod(moduleId).name}: ${count} record${count === 1 ? "" : "s"}`);
+        },
+
+        reportDelay: (recordId, note) => {
+          const u = me();
+          const rec = get().records.find((r) => r.id === recordId);
+          if (!u || !rec?.order) return { ok: false, errors: ["This order no longer exists."] };
+          const owner = STAGE_INFO[rec.data.stage as OrderStage]?.owner;
+          if (!canActAs(u, owner)) return { ok: false, errors: [`Only ${owner ? POSITION_LABEL[owner] : "the assigned role"} can report a delay on this order.`] };
+          const sla = slaOf(rec);
+          if (rec.data.stage === "Done" || !sla || (!sla.late && !sla.hardToSource)) return { ok: false, errors: ["This order is within its delivery limit."] };
+          const text = note.trim();
+          if (!text) return { ok: false, errors: ["Write a short note about the delay"] };
+          const m = mod(rec.moduleId);
+          const no = recordLabel(m, rec.data);
+          const entry: OrderLogEntry = { ...logEntry(String(rec.data.stage), "Delay reported: outside our control", u), note: text, delay: true };
+          patchRecord(recordId, { updatedAt: now(), updatedBy: u.name, order: { ...rec.order, log: [...rec.order.log, entry] } });
+          notify({ role: "dept_head" }, `${no}: delay reported`, `${text} (${u.name})`, recordId, "operations");
+          event({ moduleId: "operations", recordId, title: `Delay reported on ${no}`, detail: text, level: "info" });
+          audit("Reported a delay", `${m.name} · ${no}`);
+          return { ok: true };
+        },
+
+        checkOverdue: () => {
+          const seen = new Set(get().overdueNotified);
+          const fresh = get().records.filter((r) => r.moduleId === "operations" && !r.archived && !seen.has(r.id) && isOpenOverdue(r));
+          if (!fresh.length) return;
+          for (const r of fresh) {
+            const sla = slaOf(r)!;
+            const no = String(r.data.order_no);
+            const reason = overdueReasonOf(r);
+            const owner = STAGE_INFO[r.data.stage as OrderStage]?.owner;
+            const detail = `${sla.lateDays} day${sla.lateDays === 1 ? "" : "s"} past the ${sla.days}-day limit. ${reason ?? "No reason recorded yet."}`;
+            if (owner) notify({ position: owner }, `${no} is past its delivery limit`, detail, r.id, "operations");
+            notify({ role: "dept_head" }, `${no} is past its delivery limit`, detail, r.id, "operations");
+            event({ moduleId: "operations", recordId: r.id, title: `${no} is past its delivery limit`, detail, level: reason ? "warning" : "error", actor: "System" });
+          }
+          set((s) => ({ overdueNotified: [...s.overdueNotified, ...fresh.map((r) => r.id)] }));
         },
 
         advanceOrder: (recordId, actionId, docs) => {
@@ -630,8 +671,8 @@ export const useApp = create<AppState>()(
       };
     },
     {
-      // v9: "Deliver by" replaces the Due column. Older saved demos start fresh.
-      name: "zentra-demo-v9",
+      // v10: overdue states, reported delays, and overdue alerts. Older saved demos start fresh.
+      name: "zentra-demo-v10",
       storage: createJSONStorage(() => {
         try {
           localStorage.setItem("__t", "1");

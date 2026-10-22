@@ -4,9 +4,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { stageVariant, STAGE_INFO, type OrderStage } from "@/lib/orders";
+import { overdueReasonOf, overdueStateOf, slaOf } from "@/lib/sla";
 import { canViewFinancials, POSITION_LABEL } from "@/lib/rbac";
 import { stageLabel } from "@/lib/terms";
-import type { EventLevel, SyncState } from "@/lib/types";
+import type { EventLevel, RecordItem, SyncState } from "@/lib/types";
 import { cn, formatPeso } from "@/lib/utils";
 import { useMe } from "@/store/app-store";
 
@@ -123,6 +124,29 @@ export function Money({ value, className }: { value: number | string | undefined
 
 export function StageBadge({ stage }: { stage: string }) {
   return <Badge variant={stageVariant(stage)}>{stageLabel(stage)}</Badge>;
+}
+
+/**
+ * The order's delivery time limit: grey on track, orange overdue with a reason on record,
+ * red overdue with none. `compact` hides the grey state where space is tight.
+ */
+export function OverdueBadge({ rec, compact }: { rec: RecordItem; compact?: boolean }) {
+  const state = overdueStateOf(rec);
+  const sla = slaOf(rec);
+  if (!state || !sla || (compact && state === "on_track")) return null;
+  if (state === "on_track") return <Badge variant="secondary">{sla.deliveredAt ? "Delivered on time" : "On track"}</Badge>;
+  const late = `${sla.lateDays} day${sla.lateDays === 1 ? "" : "s"} past the ${sla.days}-day limit${sla.deliveredAt ? " when delivered" : ""}`;
+  const reason = overdueReasonOf(rec);
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Badge variant={state === "justified" ? "warning" : "destructive"} tabIndex={0} className="cursor-default whitespace-nowrap">
+          {state === "justified" ? "Overdue · justified" : "Overdue"}
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs">{late}. {reason ?? "No reason recorded."}</TooltipContent>
+    </Tooltip>
+  );
 }
 
 export function PaymentBadge({ status }: { status: string }) {

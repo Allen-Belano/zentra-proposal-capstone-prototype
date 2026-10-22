@@ -1,4 +1,5 @@
 import type { OrderDocs, Position, RecordItem } from "./types";
+import { slaOf } from "./sla";
 import { DOC_INPUT_LABEL, STAGE_TRACK, STAGE_TRACK_OF } from "./terms";
 
 /**
@@ -134,23 +135,13 @@ export function actionOwner(rec: RecordItem, action: OrderAction): Position | un
 export const TRACK = STAGE_TRACK;
 export const trackIndex = (stage: string) => STAGE_TRACK_OF[stage as OrderStage] ?? 0;
 
-const DAY = 86_400_000;
-
-/** Why an open order needs attention, if it does. */
+/** Why an open order needs attention: on hold, or past its delivery limit and not delivered yet. */
 export function delayReason(rec: RecordItem, now = Date.now()): string | null {
   const stage = rec.data.stage as OrderStage;
   if (stage === "Done") return null;
-  const due = new Date(String(rec.data.due_date)).getTime();
-  if (!Number.isNaN(due) && due < now - DAY) {
-    const days = Math.floor((now - due) / DAY);
-    return `${days} day${days > 1 ? "s" : ""} past the due date`;
-  }
   if (stage === "On hold") return "On hold until the client settles their balance";
-  const last = rec.order?.log.at(-1)?.at;
-  if (last && now - new Date(last).getTime() > 3 * DAY) {
-    const days = Math.floor((now - new Date(last).getTime()) / DAY);
-    return `No progress for ${days} days`;
-  }
+  const sla = slaOf(rec, now);
+  if (sla && sla.late && !sla.deliveredAt) return `${sla.lateDays} day${sla.lateDays === 1 ? "" : "s"} past the delivery limit`;
   return null;
 }
 

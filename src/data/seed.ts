@@ -200,6 +200,8 @@ export function makeSeed() {
     note("n2", { position: "purchasing" }, "ORD-1042 is ready for purchasing", "Cleared by Accounting (Jessa Cruz)", "ops-2", 6.2 * D),
     note("n3", { role: "dept_head" }, "ORD-1042 changed in both systems", "Changed in both Zentra and Bitrix24", "ops-2", 42),
     note("n4", { position: "accounting" }, "ORD-1043 was delivered unpaid", "Collect the payment from Summit Ridge Accounting Firm", "ops-3", 4.3 * D),
+    note("n5", { position: "delivery" }, "ORD-1043 is past its delivery limit", "1 day past the 3-day limit. No reason recorded yet.", "ops-3", 5.3 * D),
+    note("n6", { role: "dept_head" }, "ORD-1043 is past its delivery limit", "1 day past the 3-day limit. No reason recorded yet.", "ops-3", 5.3 * D),
   ];
 
   const audit: AuditEntry[] = [
@@ -223,6 +225,8 @@ export function makeSeed() {
   return {
     users, modules, records, remote, remoteInbox, rules, pipelineRuns, rejected, syncOps, activity, audit, backups, notifications,
     batches: [] as import("@/lib/types").BatchRun[],
+    /** Orders the overdue check has already alerted on. */
+    overdueNotified: ["ops-3"] as string[],
     backupSchedule: "every_4_hours" as const,
     outage: false,
   };

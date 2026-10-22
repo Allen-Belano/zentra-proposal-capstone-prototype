@@ -94,6 +94,8 @@ export interface OrderLogEntry {
   role: Role | "system";
   at: string;
   note?: string;
+  /** A delay reported by staff (Report delay). It explains lateness; it isn't a completed stage. */
+  delay?: boolean;
 }
 
 export interface OrderProcess {
