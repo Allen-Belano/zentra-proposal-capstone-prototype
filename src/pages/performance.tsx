@@ -4,7 +4,7 @@ import { CheckCircle2, Clock, Gauge, Hourglass, Timer, Truck } from "lucide-reac
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MonthPicker } from "@/components/app/month-picker";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { EmptyState, PageHeader, StatCard } from "@/components/app/bits";
 import { Forbidden } from "@/components/app/guard";
@@ -16,7 +16,6 @@ import { TERM_HELP } from "@/lib/terms";
 import { cn } from "@/lib/utils";
 import { useApp, useMe } from "@/store/app-store";
 
-const MONTH = new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", month: "long", year: "numeric" });
 const SHORT_MONTH = new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", month: "short" });
 const monthsBack = (n: number) => {
   const d = new Date();
@@ -200,10 +199,7 @@ export function PerformancePage() {
           ? "Key numbers for each Operations employee and the department, measured from completed order stages."
           : "Your key numbers, measured from the order stages you complete. Only you and your Department Head can see them."}
         actions={
-          <Select value={month} onValueChange={setMonth}>
-            <SelectTrigger className="h-10 w-44" aria-label="Month"><SelectValue /></SelectTrigger>
-            <SelectContent>{months.map((m) => <SelectItem key={m} value={m}>{MONTH.format(new Date(`${m}-01T00:00:00Z`))}</SelectItem>)}</SelectContent>
-          </Select>
+          <MonthPicker value={month} months={months} onChange={setMonth} />
         }
       />
       <div className="grid gap-4">

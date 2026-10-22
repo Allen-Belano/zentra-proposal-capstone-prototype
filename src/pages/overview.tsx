@@ -8,9 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LevelDot, Money, PageHeader, StageBadge, StatCard } from "@/components/app/bits";
+import { MonthPicker } from "@/components/app/month-picker";
 import { delayReason, STAGE_INFO, type OrderStage } from "@/lib/orders";
 import { ROLE_LABEL, can, canViewDailySummary, canViewMonthlyMetrics, moduleAccess, POSITION_LABEL, POSITIONS, titleOf } from "@/lib/rbac";
 import { stageLabel, TERM_HELP } from "@/lib/terms";
@@ -191,10 +191,7 @@ function MonthlyMetricsCard({ className }: { className?: string }) {
           <CardTitle>Monthly metrics</CardTitle>
           <CardDescription>Shared business and operations numbers for {MONTH.format(new Date(`${month}-01T00:00:00Z`))}</CardDescription>
         </div>
-        <Select value={month} onValueChange={setMonth}>
-          <SelectTrigger className="h-10 w-44" aria-label="Month"><SelectValue /></SelectTrigger>
-          <SelectContent>{months.map((m) => <SelectItem key={m} value={m}>{MONTH.format(new Date(`${m}-01T00:00:00Z`))}</SelectItem>)}</SelectContent>
-        </Select>
+        <MonthPicker value={month} months={months} onChange={setMonth} />
       </CardHeader>
       <CardContent className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {tiles.map((t) => (
