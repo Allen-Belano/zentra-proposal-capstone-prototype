@@ -38,6 +38,8 @@ export interface OrderAction {
   /** Next stage; omitted when the action doesn't move the order. */
   next?: (rec: RecordItem) => OrderStage;
   markPaid?: boolean;
+  /** Adds the order's items to Inventory stock. */
+  addsStock?: boolean;
   describe: (docs: Partial<Record<keyof OrderDocs, string>>) => string;
 }
 
@@ -81,7 +83,7 @@ export const ORDER_ACTIONS: OrderAction[] = [
   },
   {
     id: "post-rr", stage: "Receiving", primary: true, label: "Post receiving report",
-    hint: "Record the supplier delivery as received.", next: () => "Invoicing",
+    hint: "Record the supplier delivery as received and add the items to stock.", next: () => "Invoicing", addsStock: true,
     docs: [{ key: "rr", label: DOC_INPUT_LABEL.rr, prefix: "RR-" }],
     describe: (d) => `Supplier delivery received; receiving report ${d.rr} posted`,
   },
@@ -114,6 +116,14 @@ export const ORDER_ACTIONS: OrderAction[] = [
     describe: (d) => `Payment received early (${d.payment})`,
   },
 ];
+
+/** Reads an order's items, such as "8x Desktop PC (Core i5, 16GB)", into quantities and item names. */
+export function parseItems(items: string): { qty: number; name: string }[] {
+  return items.split(/[;\n]/).flatMap((part) => {
+    const m = part.trim().match(/^(\d+)\s*x\s+(.+)$/i);
+    return m ? [{ qty: Number(m[1]), name: m[2].trim() }] : [];
+  });
+}
 
 /** Actions available on an order right now, before checking who is asking. */
 export function actionsFor(rec: RecordItem): OrderAction[] {

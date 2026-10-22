@@ -38,7 +38,7 @@ export const POSITION_LABEL: Record<Position, string> = {
 const FINANCIAL_POSITIONS: Position[] = ["accounting", "invoicing"];
 
 const ROLE_PERMISSIONS: Record<Role, Permission[]> = {
-  super_admin: ["dashboard.view", "activity.view", "users.manage", "audit.view"],
+  super_admin: ["dashboard.view", "activity.view", "modules.manage", "users.manage", "audit.view"],
   dept_head: [
     "dashboard.view", "activity.view", "pipeline.manage",
     "sync.manage", "modules.manage", "backups.manage", "access.manage",
