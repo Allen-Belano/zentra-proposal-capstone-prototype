@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { makeSeed } from "@/data/seed";
-import { actionOwner, actionsFor, ORDER_ACTIONS, STAGE_INFO, type OrderStage } from "@/lib/orders";
+import { actionOwner, actionsFor, ORDER_ACTIONS, parseItems, STAGE_INFO, type OrderStage } from "@/lib/orders";
 import { isOpenOverdue, overdueReasonOf, paymentDueOf, slaOf } from "@/lib/sla";
 import { can, canActAs, canExport, canViewFinancials, moduleAccess, POSITION_LABEL } from "@/lib/rbac";
 import { recordLabel, transformRow, validateRow } from "@/lib/validation";
@@ -130,6 +130,16 @@ export const useApp = create<AppState>()(
       const mod = (id: string) => get().modules.find((m) => m.id === id)!;
       const patchRecord = (id: string, patch: Partial<RecordItem>) =>
         set((s) => ({ records: s.records.map((r) => (r.id === id ? { ...r, ...patch } : r)) }));
+      /** Adds received order items to the matching Inventory items, matched by item name. */
+      const receiveStock = (items: string, orderNo: string) => {
+        for (const { qty, name } of parseItems(items)) {
+          const item = get().records.find((r) => r.moduleId === "ims" && !r.archived && String(r.data.name).toLowerCase() === name.toLowerCase());
+          if (!item) continue;
+          const before = Number(item.data.on_hand) || 0;
+          patchRecord(item.id, { data: { ...item.data, on_hand: before + qty }, updatedAt: now(), updatedBy: actorName() });
+          event({ moduleId: "ims", recordId: item.id, title: `${name}: ${qty} received`, detail: `Stock ${before} → ${before + qty}, from ${orderNo}`, level: "success" });
+        }
+      };
       const patchOp = (id: string, patch: Partial<SyncOperation>) =>
         set((s) => ({ syncOps: s.syncOps.map((o) => (o.id === id ? { ...o, ...patch } : o)) }));
 
@@ -371,6 +381,7 @@ export const useApp = create<AppState>()(
           };
           patchRecord(recordId, updated);
           const no = recordLabel(m, data);
+          if (action.addsStock) receiveStock(String(rec.data.items ?? ""), no);
           const arrival = stage !== rec.data.stage ? ARRIVAL[stage as OrderStage] : undefined;
           if (arrival) notify(arrival.to, arrival.title(no), `${description} (${u.name})`, recordId, "operations");
           audit("Updated order", `${m.name} · ${no}: ${action.label.toLowerCase()}`);
@@ -580,7 +591,7 @@ export const useApp = create<AppState>()(
         },
 
         registerModule: (m, rules = []) => {
-          if (!can(me(), "modules.manage")) return { ok: false, errors: ["Only the Operations Department Head can connect systems."] };
+          if (!can(me(), "modules.manage")) return { ok: false, errors: ["Only the Super Admin or the Operations Department Head can connect systems."] };
           if (get().modules.some((x) => x.id === m.id)) return { ok: false, errors: [`A module with the key "${m.id}" already exists.`] };
           const full: ModuleDef = { ...m, registeredAt: now(), registeredBy: actorName(), lastSyncedAt: m.kind === "external" ? now() : undefined };
           set((s) => ({

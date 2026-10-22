@@ -121,6 +121,19 @@ export function paymentDueOf(rec: RecordItem, now = Date.now()): PaymentDue | nu
 }
 
 /**
+ * The orders on the Department Head's Overdue tab: every open order that ran past its delivery
+ * limit, delivered or not. Red before orange, then the most days late first.
+ */
+export function overdueForDepartment(orders: RecordItem[], now = Date.now()) {
+  const rank = (s: OverdueState | null) => (s === "overdue" ? 0 : 1);
+  return orders
+    .filter((o) => o.data.stage !== "Done")
+    .map((o) => ({ o, state: overdueStateOf(o, now), late: slaOf(o, now)?.lateDays ?? 0 }))
+    .filter((x) => x.state === "overdue" || x.state === "justified")
+    .sort((a, b) => rank(a.state) - rank(b.state) || b.late - a.late);
+}
+
+/**
  * The orders on a role's Overdue tab, red before orange. Accounting's are unpaid orders past
  * their payment due date; every other role's are its open orders past the delivery limit.
  */

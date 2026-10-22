@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LevelDot, Money, OverdueBadge, PageHeader, PaymentDueBadge, StageBadge, StatCard } from "@/components/app/bits";
 import { DatePicker, MonthPicker } from "@/components/app/date-picker";
 import { delayReason, STAGE_INFO, type OrderStage } from "@/lib/orders";
-import { overdueForRole, purchasingToDeliveryDays, SLA_DAYS, slaOf } from "@/lib/sla";
+import { overdueForDepartment, overdueForRole, purchasingToDeliveryDays, SLA_DAYS, slaOf } from "@/lib/sla";
 import { ROLE_LABEL, can, canViewDailySummary, canViewMonthlyMetrics, moduleAccess, POSITION_LABEL, POSITIONS, titleOf } from "@/lib/rbac";
 import { PAGE_LABEL, stageLabel, TERM_HELP } from "@/lib/terms";
 import type { RecordItem } from "@/lib/types";
@@ -399,11 +399,13 @@ function MyKpis({ className }: { className?: string }) {
 }
 
 /** C4: the role's open orders past their limit, red first. Accounting's are late payments. */
-function OverdueList() {
+function OverdueList({ department = false }: { department?: boolean }) {
   const me = useMe()!;
   const orders = useOrders();
-  const list = me.position ? overdueForRole(orders, me.position, (o) => STAGE_INFO[o.data.stage as OrderStage]?.owner) : [];
-  const accounting = me.position === "accounting";
+  const list = department
+    ? overdueForDepartment(orders)
+    : me.position ? overdueForRole(orders, me.position, (o) => STAGE_INFO[o.data.stage as OrderStage]?.owner) : [];
+  const accounting = !department && me.position === "accounting";
   return (
     <Card>
       <CardHeader>
@@ -411,7 +413,9 @@ function OverdueList() {
         <CardDescription>
           {accounting
             ? "Delivered orders past their payment due date (delivery date plus payment terms). Red has no reason recorded."
-            : `Orders at your stage past the delivery limit (${SLA_DAYS.standard} days from Purchasing, ${SLA_DAYS.hardToSource} if hard to source). Red has no reason recorded.`}
+            : department
+              ? `Open orders that ran past the delivery limit (${SLA_DAYS.standard} days from Purchasing, ${SLA_DAYS.hardToSource} if hard to source), delivered or not. Red has no reason recorded and is listed first.`
+              : `Orders at your stage past the delivery limit (${SLA_DAYS.standard} days from Purchasing, ${SLA_DAYS.hardToSource} if hard to source). Red has no reason recorded.`}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -674,6 +678,7 @@ export function OverviewPage() {
   const loaded = recentRuns.reduce((a, r) => a + r.loaded, 0);
   const issues = syncOps.filter((o) => o.status === "conflict" || o.status === "failed").length;
   const openRejected = rejected.filter((r) => r.status === "open").length;
+  const overdue = overdueForDepartment(orders);
 
   return (
     <>
@@ -684,6 +689,12 @@ export function OverviewPage() {
           <TabsTrigger value="attention">
             <span className="sm:hidden">Attention</span><span className="hidden sm:inline">Needs attention</span>
             {attention.total > 0 && <span className="rounded-full bg-warning/15 px-1.5 text-xs tabular text-warning">{attention.total}</span>}
+          </TabsTrigger>
+          <TabsTrigger value="overdue">
+            Overdue
+            {overdue.length > 0 && (
+              <span className={cn("rounded-full px-1.5 text-xs tabular", overdue.some((x) => x.state === "overdue") ? "bg-destructive/15 text-destructive" : "bg-warning/15 text-warning")}>{overdue.length}</span>
+            )}
           </TabsTrigger>
           <TabsTrigger value="technical">System health</TabsTrigger>
         </TabsList>
@@ -696,6 +707,8 @@ export function OverviewPage() {
         </TabsContent>
 
         <TabsContent value="attention"><NeedsAttention /></TabsContent>
+
+        <TabsContent value="overdue"><OverdueList department /></TabsContent>
 
         <TabsContent value="technical" className="grid gap-4">
           <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
