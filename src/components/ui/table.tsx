@@ -23,8 +23,8 @@ export const TableRow = ({ className, ...p }: React.HTMLAttributes<HTMLTableRowE
   />
 );
 export const TableHead = ({ className, ...p }: React.ThHTMLAttributes<HTMLTableCellElement>) => (
-  <th className={cn("h-9 px-2 text-left align-middle text-xs font-medium text-muted-foreground whitespace-nowrap", className)} {...p} />
+  <th className={cn("h-9 px-1.5 text-left align-middle text-xs font-medium text-muted-foreground whitespace-nowrap", className)} {...p} />
 );
 export const TableCell = ({ className, ...p }: React.TdHTMLAttributes<HTMLTableCellElement>) => (
-  <td className={cn("px-2 py-2.5 align-middle", className)} {...p} />
+  <td className={cn("px-1.5 py-2.5 align-middle", className)} {...p} />
 );
