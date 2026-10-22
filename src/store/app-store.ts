@@ -630,8 +630,8 @@ export const useApp = create<AppState>()(
       };
     },
     {
-      // v7: Operations is the first module. Older saved demos start fresh.
-      name: "zentra-demo-v7",
+      // v8: new starting demo data (three orders, IT hardware). Older saved demos start fresh.
+      name: "zentra-demo-v8",
       storage: createJSONStorage(() => {
         try {
           localStorage.setItem("__t", "1");

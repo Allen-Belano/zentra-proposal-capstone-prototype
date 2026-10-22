@@ -24,7 +24,6 @@ const PHT_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" });
 const PHT_LABEL = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric" });
 const LONG_DAY = new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", weekday: "long", month: "long", day: "numeric" });
 const MONTH = new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", month: "long", year: "numeric" });
-const SHORT_MONTH = new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", month: "short" });
 
 /** Calendar day (YYYY-MM-DD) and month (YYYY-MM) in Philippine time. */
 const dayKey = (d: string | Date) => PHT_DAY.format(new Date(d));
@@ -209,21 +208,11 @@ function MonthlyMetricsCard({ className }: { className?: string }) {
     });
   }, []);
   const [month, setMonth] = useState(months[0]);
-  const prevKey = useMemo(() => {
-    const [y, mo] = month.split("-").map(Number);
-    return new Date(Date.UTC(y, mo - 2, 1)).toISOString().slice(0, 7);
-  }, [month]);
   const cur = useMemo(() => monthStats(orders, month), [orders, month]);
-  const prev = useMemo(() => monthStats(orders, prevKey), [orders, prevKey]);
-  const prevName = SHORT_MONTH.format(new Date(`${prevKey}-01T00:00:00Z`));
-  const delta = (a: number, b: number) => {
-    const d = a - b;
-    return d === 0 ? `Same as ${prevName}` : `${d > 0 ? "+" : ""}${d} vs ${prevName}`;
-  };
 
   const tiles: { label: string; value: React.ReactNode; hint: string }[] = [
-    { label: "Orders received", value: cur.received, hint: delta(cur.received, prev.received) },
-    { label: "Orders completed", value: cur.completed, hint: delta(cur.completed, prev.completed) },
+    { label: "Orders received", value: cur.received, hint: "Orders confirmed this month" },
+    { label: "Orders completed", value: cur.completed, hint: "Collection done this month" },
     { label: "On-time deliveries", value: cur.onTimePct === null ? "—" : `${cur.onTimePct}%`, hint: `${cur.delivered} delivered this month` },
     { label: "Average time to complete", value: cur.avgDays === null ? "—" : `${cur.avgDays.toFixed(1)} days`, hint: "From order confirmed to payment" },
     { label: "Invoiced sales", value: <Money value={cur.invoiced} />, hint: "Sales invoices issued" },
@@ -388,7 +377,7 @@ function NeedsAttention() {
 
 function MyKpis({ className }: { className?: string }) {
   const me = useMe()!;
-  const { employees, prevName } = useKpiData(monthKey(new Date()));
+  const { employees } = useKpiData(monthKey(new Date()));
   const mine = employees.find((k) => k.user.id === me.id);
   if (!mine) return null;
   return (
@@ -397,7 +386,7 @@ function MyKpis({ className }: { className?: string }) {
         <h2 className="text-sm font-medium text-muted-foreground">My performance this month</h2>
         <Link to="/performance" className="text-sm text-primary hover:underline">Details</Link>
       </div>
-      <KpiCard k={mine} prevName={prevName} />
+      <KpiCard k={mine} />
     </div>
   );
 }
