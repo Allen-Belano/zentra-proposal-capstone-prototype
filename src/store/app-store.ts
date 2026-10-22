@@ -674,7 +674,7 @@ export const useApp = create<AppState>()(
     },
     {
       // v11: payment terms. Older saved demos start fresh.
-      name: "zentra-demo-v11",
+      name: "zentra-demo-v13",
       storage: createJSONStorage(() => {
         try {
           localStorage.setItem("__t", "1");

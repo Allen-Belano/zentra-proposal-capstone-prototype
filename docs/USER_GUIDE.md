@@ -54,7 +54,7 @@ The last five are **Department Employees** in Operations. Each holds exactly one
 |---|---|
 | **Sidebar** (left) | The pages your role can open. It stays in place while you scroll. **Collapse** at the bottom shrinks it to icons. |
 | **Title bar** (top) | Where you are, e.g. *Monitoring › Order tracking*. On phones, the ☰ button opens the menu. |
-| **Bell** 🔔 | Notifications for you or your role, such as "ORD-1041 is ready for purchasing." Click one to open that order. |
+| **Bell** 🔔 | Notifications for you or your role, such as "ORD-1 is ready for purchasing." Click one to open that order. |
 | **Avatar menu** | Your name and role, the **Theme** switch (Light, Dark, System), **Reset demo data**, and **Sign out**. |
 
 ### Pages
@@ -256,16 +256,16 @@ Restricted amounts show as **₱ ••••** and are left out of search. Form
 
 ## 7. Demo script for presentations
 
-This walkthrough takes about 10 minutes and follows one order, **ORD-1041**, from the confirmed order to payment. Before you start, open the avatar menu and click **Reset demo data**.
+This walkthrough takes about 10 minutes and follows one order, **ORD-1**, from the confirmed order to payment. Before you start, open the avatar menu and click **Reset demo data**.
 
-1. **Accounting (Jessa).** The Overview shows *Waiting on you*. Open **ORD-1041** and point out the document list and the timeline. Click **Clear the order**.
-2. **Purchasing (Mark).** The bell shows "ORD-1041 is ready for purchasing." Amounts are masked for this role. Open the notification and **Issue vendor P.O**.
-3. **Inventory (Ana).** Show that only this role can edit Inventory, and that unit costs are hidden. Open ORD-1041 and **Post receiving report**.
+1. **Accounting (Jessa).** The Overview shows *Waiting on you*. Open **ORD-1** and point out the document list and the timeline. Click **Clear the order**.
+2. **Purchasing (Mark).** The bell shows "ORD-1 is ready for purchasing." Amounts are masked for this role. Open the notification and **Issue vendor P.O**.
+3. **Inventory (Ana).** Show that only this role can edit Inventory, and that unit costs are hidden. Open ORD-1 and **Post receiving report**.
 4. **Invoicing (Paolo)** → **Issue SI and WR**.
 5. **Delivery (Lea)** → **Record delivery**. Because the order is unpaid, it moves to **Collection**.
 6. **Accounting (Jessa)** → **Record payment**. The order is **Completed**, and its timeline shows every stage with who did it and when.
 7. **Operations Department Head (Carlo).**
-   - **Overview → General**: today's summary now lists ORD-1041 as paid.
+   - **Overview → General**: today's summary now lists ORD-1 as paid.
    - **Needs attention**: delayed orders, unpaid orders, and pending tasks by role.
    - **Bitrix24 updates → Process many at once**: select all and process. Point out the summary of succeeded, failed, and needs action.
    - **Team access**: show the role picker and the permission matrix.
