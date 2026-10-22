@@ -93,16 +93,16 @@ export function makeSeed() {
 
   const wonAt = (minutesAgo: number): Step => ["Accounting", "Order confirmed in Bitrix24; order created in Zentra", "bitrix", minutesAgo];
   // Three orders, each with a job in the demo:
-  // ORD-1041 just arrived for Accounting and is walked through every stage live.
-  // ORD-1042 has waited for a hard-to-source supplier for 6 days, past the 5-day limit, with a reason on record.
-  // ORD-1043 was delivered 5 days after entering Purchasing, past the 3-day limit with no reason, and is now in Collection.
+  // ORD-1 just arrived for Accounting and is walked through every stage live.
+  // ORD-2 has waited for a hard-to-source supplier for 6 days, past the 5-day limit, with a reason on record.
+  // ORD-3 was delivered 5 days after entering Purchasing, past the 3-day limit with no reason, and is now in Collection.
   const orderSpecs: { no: string; customer: string; clientPo: string; items: string; amount: number; stage: OrderStage; payment: "Paid" | "Unpaid"; terms: (typeof PAYMENT_TERMS)[number]; due: number; steps: Step[] }[] = [
-    { no: "ORD-1041", customer: "Northgate Logistics Inc.", clientPo: "CPO-60311", items: "8x Desktop PC (Core i5, 16GB)", amount: 364000, stage: "Accounting", payment: "Unpaid", terms: "30 days", due: 5,
+    { no: "ORD-1", customer: "Northgate Logistics Inc.", clientPo: "CPO-60311", items: "8x Desktop PC (Core i5, 16GB)", amount: 364000, stage: "Accounting", payment: "Unpaid", terms: "30 days", due: 5,
       steps: [wonAt(40)] },
-    { no: "ORD-1042", customer: "Marikina City Hall IT Office", clientPo: "CPO-60287", items: "4x 24-port PoE network switch", amount: 88000, stage: "Order basis", payment: "Unpaid", terms: "15 days", due: 2,
+    { no: "ORD-2", customer: "Marikina City Hall IT Office", clientPo: "CPO-60287", items: "4x 24-port PoE network switch", amount: 88000, stage: "Order basis", payment: "Unpaid", terms: "15 days", due: 2,
       steps: [wonAt(6.4 * D), ["Accounting", "Cleared by Accounting: no unpaid balance", "accounting", 6.2 * D],
         ["Purchasing", "Vendor P.O SPO-3331 issued; the order waits for the supplier (long lead time)", "purchasing", 6 * D, { supplierPo: "SPO-3331" }]] },
-    { no: "ORD-1043", customer: "Summit Ridge Accounting Firm", clientPo: "CPO-60254", items: "6x 4-camera IP security kit", amount: 177000, stage: "Collection", payment: "Unpaid", terms: "30 days", due: -3,
+    { no: "ORD-3", customer: "Summit Ridge Accounting Firm", clientPo: "CPO-60254", items: "6x 4-camera IP security kit", amount: 177000, stage: "Collection", payment: "Unpaid", terms: "30 days", due: -3,
       steps: [wonAt(9.5 * D), ["Accounting", "Cleared by Accounting: no unpaid balance", "accounting", 9.3 * D],
         ["Purchasing", "Vendor P.O SPO-3324 issued for the missing items", "purchasing", 9 * D, { supplierPo: "SPO-3324" }],
         ["Receiving", "Supplier delivery received; receiving report RR-2231 posted", "inventory", 6.5 * D, { rr: "RR-2231" }],
@@ -142,12 +142,12 @@ export function makeSeed() {
   // The mock Bitrix24 copy of each Operations record.
   const remote: Record<string, RemoteRecord> = {};
   for (const r of records.filter((r) => r.moduleId === "operations")) remote[r.id] = { data: { ...r.data }, version: 1 };
-  // ORD-1042 was changed in Bitrix24 while a Zentra edit was pending: the one seeded conflict.
+  // ORD-2 was changed in Bitrix24 while a Zentra edit was pending: the one seeded conflict.
   remote["ops-2"] = { data: { ...remote["ops-2"].data, items: "5x 24-port PoE network switch", amount: 110000 }, version: 2 };
 
   /** A deal won in Bitrix24 that hasn't been pulled into Zentra yet. It's incomplete on purpose, so "Update now" shows a record that needs fixing without adding a fourth order. */
   const remoteInbox: Record<string, string>[] = [
-    { order_no: "ORD-1044", customer: "", client_po: "CPO-60330", items: "12x Wireless keyboard and mouse set", amount: "21600", stage: "Accounting", payment: "Unpaid", due_date: daysFromNow(7), payment_terms: "30 days" },
+    { order_no: "ORD-4", customer: "", client_po: "CPO-60330", items: "12x Wireless keyboard and mouse set", amount: "21600", stage: "Accounting", payment: "Unpaid", due_date: daysFromNow(7), payment_terms: "30 days" },
   ];
 
   const rules: ValidationRule[] = [
@@ -159,7 +159,7 @@ export function makeSeed() {
     { id: "r6", moduleId: "ims", field: "on_hand", kind: "min", value: "0", enabled: true },
     { id: "r7", moduleId: "ims", field: "unit_cost", kind: "min", value: "0", enabled: true },
     { id: "r8", moduleId: "operations", field: "order_no", kind: "required", enabled: true },
-    { id: "r9", moduleId: "operations", field: "order_no", kind: "pattern", value: "^ORD-\\d{4}$", enabled: true },
+    { id: "r9", moduleId: "operations", field: "order_no", kind: "pattern", value: "^ORD-\\d+$", enabled: true },
     { id: "r10", moduleId: "operations", field: "order_no", kind: "unique", enabled: true },
     { id: "r11", moduleId: "operations", field: "customer", kind: "required", enabled: true },
     { id: "r12", moduleId: "operations", field: "amount", kind: "min", value: "0", enabled: true },
@@ -183,35 +183,35 @@ export function makeSeed() {
   ];
 
   const syncOps: SyncOperation[] = [
-    { id: "s1", moduleId: "operations", recordId: "ops-2", recordLabel: "ORD-1042", direction: "outbound", status: "conflict", attempts: 1, createdAt: ago(42), error: "The order changed in Bitrix24 after Zentra's last sync.", local: { ...records.find((r) => r.id === "ops-2")!.data }, remote: { ...remote["ops-2"].data } },
-    { id: "s2", moduleId: "operations", recordId: "ops-3", recordLabel: "ORD-1043", direction: "outbound", status: "success", attempts: 1, createdAt: ago(4.3 * D), resolvedAt: ago(4.3 * D) },
-    { id: "s3", moduleId: "operations", recordId: "ops-1", recordLabel: "ORD-1041", direction: "inbound", status: "success", attempts: 1, createdAt: ago(40), resolvedAt: ago(40) },
+    { id: "s1", moduleId: "operations", recordId: "ops-2", recordLabel: "ORD-2", direction: "outbound", status: "conflict", attempts: 1, createdAt: ago(42), error: "The order changed in Bitrix24 after Zentra's last sync.", local: { ...records.find((r) => r.id === "ops-2")!.data }, remote: { ...remote["ops-2"].data } },
+    { id: "s2", moduleId: "operations", recordId: "ops-3", recordLabel: "ORD-3", direction: "outbound", status: "success", attempts: 1, createdAt: ago(4.3 * D), resolvedAt: ago(4.3 * D) },
+    { id: "s3", moduleId: "operations", recordId: "ops-1", recordLabel: "ORD-1", direction: "inbound", status: "success", attempts: 1, createdAt: ago(40), resolvedAt: ago(40) },
   ];
 
   const activity: ActivityEvent[] = [
-    { id: "e1", moduleId: "operations", recordId: "ops-2", title: "ORD-1042 changed in both systems", detail: "Changed in both Zentra and Bitrix24. Waiting for review.", actor: "System", level: "warning", at: ago(42) },
+    { id: "e1", moduleId: "operations", recordId: "ops-2", title: "ORD-2 changed in both systems", detail: "Changed in both Zentra and Bitrix24. Waiting for review.", actor: "System", level: "warning", at: ago(42) },
     { id: "e4", moduleId: "ims", title: "File import #101 finished", detail: "8 validated, 2 need fixing, from stock_count_oct21.csv", actor: "Carlo Reyes", level: "warning", at: ago(20 * H) },
     { id: "e6", moduleId: "ims", recordId: "ims-3", title: "24-port PoE network switch is below reorder level", detail: "3 on hand, reorder at 4", actor: "System", level: "warning", at: ago(300) },
     { id: "e8", moduleId: "operations", title: "Bitrix24 update finished", detail: "1 order pulled", actor: "Scheduled update", level: "success", at: ago(40) },
-    { id: "e9", moduleId: "operations", recordId: "ops-1", title: "ORD-1041 received from Bitrix24", detail: "Order confirmed; the order is waiting on Accounting", actor: "Bitrix24", level: "info", at: ago(40) },
+    { id: "e9", moduleId: "operations", recordId: "ops-1", title: "ORD-1 received from Bitrix24", detail: "Order confirmed; the order is waiting on Accounting", actor: "Bitrix24", level: "info", at: ago(40) },
   ];
 
   const note = (id: string, to: AppNotification["to"], title: string, detail: string, recordId: string | undefined, min: number): AppNotification =>
     ({ id, to, title, detail, recordId, moduleId: "operations", at: ago(min), readBy: [] });
   const notifications: AppNotification[] = [
-    note("n1", { position: "accounting" }, "ORD-1041 is ready for Accounting", "New order from Northgate Logistics Inc.", "ops-1", 40),
-    note("n2", { position: "purchasing" }, "ORD-1042 is ready for purchasing", "Cleared by Accounting (Jessa Cruz)", "ops-2", 6.2 * D),
-    note("n3", { role: "dept_head" }, "ORD-1042 changed in both systems", "Changed in both Zentra and Bitrix24", "ops-2", 42),
-    note("n4", { position: "accounting" }, "ORD-1043 was delivered unpaid", "Collect the payment from Summit Ridge Accounting Firm", "ops-3", 4.3 * D),
-    note("n5", { position: "delivery" }, "ORD-1043 is past its delivery limit", "1 day past the 3-day limit. No reason recorded yet.", "ops-3", 5.3 * D),
-    note("n6", { role: "dept_head" }, "ORD-1043 is past its delivery limit", "1 day past the 3-day limit. No reason recorded yet.", "ops-3", 5.3 * D),
+    note("n1", { position: "accounting" }, "ORD-1 is ready for Accounting", "New order from Northgate Logistics Inc.", "ops-1", 40),
+    note("n2", { position: "purchasing" }, "ORD-2 is ready for purchasing", "Cleared by Accounting (Jessa Cruz)", "ops-2", 6.2 * D),
+    note("n3", { role: "dept_head" }, "ORD-2 changed in both systems", "Changed in both Zentra and Bitrix24", "ops-2", 42),
+    note("n4", { position: "accounting" }, "ORD-3 was delivered unpaid", "Collect the payment from Summit Ridge Accounting Firm", "ops-3", 4.3 * D),
+    note("n5", { position: "delivery" }, "ORD-3 is past its delivery limit", "1 day past the 3-day limit. No reason recorded yet.", "ops-3", 5.3 * D),
+    note("n6", { role: "dept_head" }, "ORD-3 is past its delivery limit", "1 day past the 3-day limit. No reason recorded yet.", "ops-3", 5.3 * D),
   ];
 
   const audit: AuditEntry[] = [
     { id: "a1", actor: "Jessa Cruz", role: "employee", action: "Signed in", target: "Session", at: ago(5) },
     { id: "a2", actor: "Carlo Reyes", role: "dept_head", action: "Imported a file", target: "Inventory · stock_count_oct21.csv", at: ago(20 * H) },
-    { id: "a3", actor: "Lea Mendoza", role: "employee", action: "Updated order", target: "Operations · ORD-1043: delivered", at: ago(4.3 * D) },
-    { id: "a4", actor: "Mark Dizon", role: "employee", action: "Updated order", target: "Operations · ORD-1042: vendor P.O issued, waiting for supplier", at: ago(6 * D) },
+    { id: "a3", actor: "Lea Mendoza", role: "employee", action: "Updated order", target: "Operations · ORD-3: delivered", at: ago(4.3 * D) },
+    { id: "a4", actor: "Mark Dizon", role: "employee", action: "Updated order", target: "Operations · ORD-2: vendor P.O issued, waiting for supplier", at: ago(6 * D) },
     { id: "a5", actor: "Carlo Reyes", role: "dept_head", action: "Assigned Operations role", target: "Lea Mendoza: Delivery", at: ago(60 * 24 * 12) },
     { id: "a6", actor: "Carlo Reyes", role: "dept_head", action: "Created backup", target: "Manual restore point", at: ago(60 * 24 * 4) },
   ];
@@ -249,8 +249,8 @@ NET-2010,Cat6 patch cable 2m (pack of 10),Networking,50,20,1800,Bin B3
 CMP-1001,Business laptop 14in,Computers,6,8,42500,Rack A1
 PER-3013,Wireless presenter,Peripherals,25,10,1350,Shelf C3`,
   operations: `order_no,customer,client_po,items,amount,stage,payment,due_date
-ORD-1050,Bayview Medical Center,CPO-60401,10x Business laptop 14in,465000,Accounting,Unpaid,2026-10-28
-ORD-1051,Quezon City Treasurer's Office,CPO-60402,20x 27in IPS monitor,260000,Accounting,Unpaid,2026-10-29
-ORD-1052,,CPO-60403,6x 1500VA UPS,52800,Accounting,Unpaid,2026-10-29
-ORD-1053,Harborline Shipping Corp.,CPO-60404,15x Wireless keyboard and mouse set,24750,Shipped,Unpaid,2026-10-30`,
+ORD-5,Bayview Medical Center,CPO-60401,10x Business laptop 14in,465000,Accounting,Unpaid,2026-10-28
+ORD-6,Quezon City Treasurer's Office,CPO-60402,20x 27in IPS monitor,260000,Accounting,Unpaid,2026-10-29
+ORD-7,,CPO-60403,6x 1500VA UPS,52800,Accounting,Unpaid,2026-10-29
+ORD-8,Harborline Shipping Corp.,CPO-60404,15x Wireless keyboard and mouse set,24750,Shipped,Unpaid,2026-10-30`,
 };
