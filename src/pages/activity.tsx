@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EmptyState, PageHeader, PaymentBadge, StageBadge, SyncBadge } from "@/components/app/bits";
 import { delayReason, STAGE_INFO, type OrderStage } from "@/lib/orders";
+import { slaOf } from "@/lib/sla";
 import { moduleAccess, POSITION_LABEL, POSITIONS } from "@/lib/rbac";
 import type { OrderLogEntry, Position, RecordItem } from "@/lib/types";
 import { formatDate, formatDateTime, timeAgo } from "@/lib/utils";
@@ -20,6 +21,7 @@ function OrderCard({ o }: { o: RecordItem }) {
   const info = STAGE_INFO[stage];
   const delay = delayReason(o);
   const last = o.order?.log.at(-1);
+  const sla = slaOf(o);
   return (
     <Link
       to="/orders/$orderId" params={{ orderId: o.id }}
@@ -52,7 +54,7 @@ function OrderCard({ o }: { o: RecordItem }) {
             <span className="text-muted-foreground">{info.pending}</span>
           </span>
         )}
-        <span className="text-muted-foreground">Due {formatDate(String(o.data.due_date))}{last && <> · updated {timeAgo(last.at)}</>}</span>
+        <span className="text-muted-foreground">{sla && !sla.deliveredAt && <>Deliver by {formatDate(sla.deadline)} · </>}{last && <>updated {timeAgo(last.at)}</>}</span>
       </div>
     </Link>
   );
@@ -71,7 +73,7 @@ export function ActivityPage() {
       .filter((r) => (show === "open" ? r.data.stage !== "Done" : show === "done" ? r.data.stage === "Done" : true))
       .filter((r) => owner === "all" || STAGE_INFO[r.data.stage as OrderStage]?.owner === owner)
       // Orders that need attention first, then by due date.
-      .sort((a, b) => Number(!!delayReason(b)) - Number(!!delayReason(a)) || String(a.data.due_date).localeCompare(String(b.data.due_date))),
+      .sort((a, b) => Number(!!delayReason(b)) - Number(!!delayReason(a)) || (slaOf(a)?.deadline ?? "9").localeCompare(slaOf(b)?.deadline ?? "9")),
     [allOrders, show, owner],
   );
 

@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LevelDot, Money, PageHeader, StageBadge, StatCard } from "@/components/app/bits";
 import { DatePicker, MonthPicker } from "@/components/app/date-picker";
 import { delayReason, STAGE_INFO, type OrderStage } from "@/lib/orders";
+import { purchasingToDeliveryDays, SLA_DAYS, slaOf } from "@/lib/sla";
 import { ROLE_LABEL, can, canViewDailySummary, canViewMonthlyMetrics, moduleAccess, POSITION_LABEL, POSITIONS, titleOf } from "@/lib/rbac";
 import { PAGE_LABEL, stageLabel, TERM_HELP } from "@/lib/terms";
 import type { RecordItem } from "@/lib/types";
@@ -178,14 +179,15 @@ function DailySummaryCard({ className }: { className?: string }) {
 
 function monthStats(orders: RecordItem[], m: string) {
   const delivered = orders.filter((o) => { const at = docAt(o, "dr"); return at && monthKey(at) === m; });
-  const onTime = delivered.filter((o) => dayKey(docAt(o, "dr")!) <= String(o.data.due_date)).length;
+  const late = delivered.filter((o) => slaOf(o)?.late).length;
   const completed = orders.filter((o) => o.data.stage === "Done" && monthKey(o.order!.log.at(-1)!.at) === m);
-  const cycle = completed.map((o) => (new Date(o.order!.log.at(-1)!.at).getTime() - new Date(o.order!.log[0].at).getTime()) / DAY_MS);
+  const cycle = delivered.map(purchasingToDeliveryDays).filter((d): d is number => d !== null);
   return {
     received: orders.filter((o) => monthKey(o.order!.log[0].at) === m).length,
     completed: completed.length,
     delivered: delivered.length,
-    onTimePct: delivered.length ? Math.round((onTime / delivered.length) * 100) : null,
+    onTimePct: delivered.length ? Math.round(((delivered.length - late) / delivered.length) * 100) : null,
+    overduePct: delivered.length ? Math.round((late / delivered.length) * 100) : null,
     avgDays: cycle.length ? cycle.reduce((a, b) => a + b, 0) / cycle.length : null,
     invoiced: orders.filter((o) => { const at = docAt(o, "si"); return at && monthKey(at) === m; }).reduce((a, o) => a + Number(o.data.amount), 0),
     collected: orders.filter((o) => { const at = docAt(o, "payment"); return at && monthKey(at) === m; }).reduce((a, o) => a + Number(o.data.amount), 0),
@@ -213,9 +215,10 @@ function MonthlyMetricsCard({ className }: { className?: string }) {
   const tiles: { label: string; value: React.ReactNode; hint: string }[] = [
     { label: "Orders received", value: cur.received, hint: "Orders confirmed this month" },
     { label: "Orders completed", value: cur.completed, hint: "Collection done this month" },
-    { label: "On-time deliveries", value: cur.onTimePct === null ? "—" : `${cur.onTimePct}%`, hint: `${cur.delivered} delivered this month` },
-    { label: "Average time to complete", value: cur.avgDays === null ? "—" : `${cur.avgDays.toFixed(1)} days`, hint: "From order confirmed to payment" },
-    { label: "Invoiced sales", value: <Money value={cur.invoiced} />, hint: "Sales invoices issued" },
+    { label: "On-time deliveries", value: cur.onTimePct === null ? "—" : `${cur.onTimePct}%`, hint: `${cur.delivered} delivered, within ${SLA_DAYS.standard} days of Purchasing` },
+    { label: "Overdue deliveries", value: cur.overduePct === null ? "—" : `${cur.overduePct}%`, hint: `Past the ${SLA_DAYS.standard}-day limit (${SLA_DAYS.hardToSource} if hard to source)` },
+    { label: "Average time to complete", value: cur.avgDays === null ? "—" : `${cur.avgDays.toFixed(1)} days`, hint: "From Purchasing to delivery" },
+    { label: "Invoiced amount", value: <Money value={cur.invoiced} />, hint: "Sales invoices issued" },
     { label: "Payments collected", value: <Money value={cur.collected} />, hint: "Official receipts issued" },
     { label: "Low-stock items", value: lowStock.length, hint: "At or below reorder level now" },
   ];

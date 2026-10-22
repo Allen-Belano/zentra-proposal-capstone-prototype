@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Money, PageHeader, PaymentBadge, StageBadge, SyncBadge } from "@/components/app/bits";
 import { Forbidden } from "@/components/app/guard";
 import { actionOwner, actionsFor, delayReason, STAGE_INFO, TRACK, trackIndex, type OrderAction, type OrderStage } from "@/lib/orders";
+import { slaOf } from "@/lib/sla";
 import { canActAs, moduleAccess, POSITION_LABEL, ROLE_LABEL } from "@/lib/rbac";
 import { DOC_LABEL, stageLabel } from "@/lib/terms";
 import type { OrderDocs, OrderLogEntry, RecordItem } from "@/lib/types";
@@ -256,7 +257,7 @@ export function OrderDetailPage() {
   if (moduleAccess(me, "operations") === "none" && me?.role !== "super_admin") return <Forbidden />;
   if (!rec?.order) return <Forbidden message="This order doesn't exist or was archived." />;
   const docs = rec.order.docs;
-  const overdue = rec.data.stage !== "Done" && new Date(String(rec.data.due_date)).getTime() < Date.now() - 86_400_000;
+  const sla = slaOf(rec);
 
   return (
     <>
@@ -298,7 +299,8 @@ export function OrderDetailPage() {
                 <Row label="Items">{rec.data.items}</Row>
                 <Row label="Amount"><Money value={rec.data.amount} /></Row>
                 <Row label="Payment"><PaymentBadge status={String(rec.data.payment)} /></Row>
-                <Row label="Due">{formatDate(String(rec.data.due_date))}{overdue && <Badge variant="destructive" className="ml-2">Overdue</Badge>}</Row>
+                <Row label="Deliver by">{sla ? `${formatDate(sla.deadline)} (${sla.days} days${sla.hardToSource ? ", hard to source" : ""})` : "Starts when the order reaches Purchasing"}</Row>
+                {sla?.deliveredAt && <Row label="Delivered">{formatDateTime(sla.deliveredAt)}</Row>}
                 <Row label="Order confirmed">{formatDateTime(rec.createdAt)}</Row>
                 <Row label="Bitrix24 order number">{rec.externalId ?? "—"}</Row>
               </CardContent>

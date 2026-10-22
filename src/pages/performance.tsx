@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { CheckCircle2, Clock, Gauge, Hourglass, Timer, Truck } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, Gauge, Hourglass, Timer, Truck } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -84,10 +84,11 @@ export function DepartmentKpis({ month }: { month: string }) {
   const chart = d.byPosition.map((p) => ({ role: POSITION_LABEL[p.position], Stages: p.steps }));
   return (
     <div className="grid gap-4">
-      <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
         <StatCard label="Orders completed" value={d.completed} icon={<CheckCircle2 />} tone="success" hint="Collection done this month" />
-        <StatCard label="Average order cycle" value={d.avgCycleDays === null ? "—" : `${d.avgCycleDays.toFixed(1)} days`} icon={<Clock />} hint="Won deal to payment" />
-        <StatCard label="On-time deliveries" value={d.onTimeDeliveryPct === null ? "—" : `${d.onTimeDeliveryPct}%`} icon={<Truck />} tone={d.onTimeDeliveryPct !== null && d.onTimeDeliveryPct < 80 ? "warning" : "default"} hint="Delivered by the due date" />
+        <StatCard label="Average order cycle" value={d.avgCycleDays === null ? "—" : `${d.avgCycleDays.toFixed(1)} days`} icon={<Clock />} hint="Purchasing to delivery" />
+        <StatCard label="On-time deliveries" value={d.onTimeDeliveryPct === null ? "—" : `${d.onTimeDeliveryPct}%`} icon={<Truck />} tone={d.onTimeDeliveryPct !== null && d.onTimeDeliveryPct < 80 ? "warning" : "default"} hint={`${d.delivered} delivered within the time limit`} />
+        <StatCard label="Overdue deliveries" value={d.overdueDeliveryPct === null ? "—" : `${d.overdueDeliveryPct}%`} icon={<AlertTriangle />} tone={d.overdueDeliveryPct ? "danger" : "default"} hint="Delivered past the time limit" />
         <StatCard label="Stages within target" value={d.onTargetPct === null ? "—" : `${d.onTargetPct}%`} icon={<Gauge />} hint={`${d.steps} stages this month`} />
       </div>
       <Card>

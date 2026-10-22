@@ -630,8 +630,8 @@ export const useApp = create<AppState>()(
       };
     },
     {
-      // v8: new starting demo data (three orders, IT hardware). Older saved demos start fresh.
-      name: "zentra-demo-v8",
+      // v9: "Deliver by" replaces the Due column. Older saved demos start fresh.
+      name: "zentra-demo-v9",
       storage: createJSONStorage(() => {
         try {
           localStorage.setItem("__t", "1");

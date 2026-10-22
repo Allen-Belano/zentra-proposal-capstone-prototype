@@ -54,7 +54,7 @@ export function makeSeed() {
         { key: "amount", label: "Amount", type: "currency", hideOnMobile: true, financial: true },
         { key: "stage", label: "Stage", type: "select", options: [...ORDER_STAGES] },
         { key: "payment", label: "Payment", type: "select", options: [...PAYMENT_STATUSES] },
-        { key: "due_date", label: "Due", type: "date", hideOnMobile: true },
+        { key: "due_date", label: "Deliver by", type: "date", hideOnMobile: true },
       ],
     },
     {

@@ -4,7 +4,7 @@ import {
   Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import {
-  ArrowDown, ArrowUp, BarChart3, CheckCircle2, Clock, Gauge, LineChart as LineIcon, PackageX, PieChart as PieIcon,
+  AlertTriangle, ArrowDown, ArrowUp, BarChart3, CheckCircle2, Clock, Gauge, LineChart as LineIcon, PackageX, PieChart as PieIcon,
   Receipt, RotateCcw, SlidersHorizontal, Truck, UserCheck, Wallet,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -43,6 +43,7 @@ export const WIDGETS: WidgetDef[] = [
   { id: "stat-delayed", kind: "stat", label: "Delayed orders", hint: "Past due, on hold, or stuck" },
   { id: "stat-invoiced", kind: "stat", label: "Invoiced this month", hint: "" },
   { id: "stat-ontime", kind: "stat", label: "On-time deliveries", hint: "" },
+  { id: "stat-overdue", kind: "stat", label: "Overdue deliveries", hint: "Delivered past the time limit" },
   { id: "stat-target", kind: "stat", label: "Stages within target", hint: "Department key numbers this month" },
   { id: "stat-low-stock", kind: "stat", label: "Low-stock items", hint: "At or below reorder level" },
   { id: "daily-summary", kind: "panel", label: "Daily process summary", hint: "Paid and unpaid orders handled on a day", span: 2 },
@@ -193,7 +194,8 @@ function StatWidget({ id }: { id: string }) {
     case "stat-awaiting": return <StatCard label="Awaiting payment" value={d.awaiting.length} icon={<Wallet />} tone={d.awaiting.length ? "warning" : "default"} hint={<><Money value={d.awaiting.reduce((a, o) => a + Number(o.data.amount), 0)} /> receivable</>} />;
     case "stat-delayed": return <StatCard label="Delayed orders" value={d.delayed.length} icon={<Clock />} tone={d.delayed.length ? "warning" : "success"} hint="See Needs attention" />;
     case "stat-invoiced": return <StatCard label="Invoiced this month" value={<Money value={d.invoiced.reduce((a, o) => a + Number(o.data.amount), 0)} />} icon={<Receipt />} hint={`${d.invoiced.length} sales invoices`} />;
-    case "stat-ontime": return <StatCard label="On-time deliveries" value={d.dept.onTimeDeliveryPct === null ? "—" : `${d.dept.onTimeDeliveryPct}%`} icon={<CheckCircle2 />} hint="Delivered by the due date" />;
+    case "stat-ontime": return <StatCard label="On-time deliveries" value={d.dept.onTimeDeliveryPct === null ? "—" : `${d.dept.onTimeDeliveryPct}%`} icon={<CheckCircle2 />} hint="Delivered within the time limit" />;
+    case "stat-overdue": return <StatCard label="Overdue deliveries" value={d.dept.overdueDeliveryPct === null ? "—" : `${d.dept.overdueDeliveryPct}%`} icon={<AlertTriangle />} tone={d.dept.overdueDeliveryPct ? "danger" : "success"} hint="Delivered past the time limit" />;
     case "stat-target": return <StatCard label="Stages within target" value={d.dept.onTargetPct === null ? "—" : `${d.dept.onTargetPct}%`} icon={<Gauge />} hint={`${d.dept.steps} stages this month`} />;
     case "stat-low-stock": return <StatCard label="Low-stock items" value={d.lowStock.length} icon={<PackageX />} tone={d.lowStock.length ? "warning" : "success"} hint="At or below reorder level" />;
     default: return null;

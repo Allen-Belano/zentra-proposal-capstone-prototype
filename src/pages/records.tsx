@@ -16,6 +16,7 @@ import { confirmAction } from "@/components/app/confirm";
 import { RecordForm } from "@/components/app/record-form";
 import { can, canExport, moduleAccess } from "@/lib/rbac";
 import type { ModuleField, RecordItem } from "@/lib/types";
+import { slaOf } from "@/lib/sla";
 import { stageLabel } from "@/lib/terms";
 import { cn, formatDate, formatDateTime, timeAgo } from "@/lib/utils";
 import { recordLabel } from "@/lib/validation";
@@ -51,6 +52,10 @@ function Cell({ field, rec }: { field: ModuleField; rec: RecordItem }) {
   const v = rec.data[field.key];
   if (v === "" || v === undefined) return <span className="text-muted-foreground">—</span>;
   if (field.type === "currency") return <Money value={v} />;
+  if (field.key === "due_date" && rec.order) {
+    const sla = slaOf(rec);
+    return sla ? <span className="whitespace-nowrap">{formatDate(sla.deadline)}</span> : <span className="text-muted-foreground">—</span>;
+  }
   if (field.type === "date") return <span className="whitespace-nowrap">{formatDate(String(v))}</span>;
   if (field.key === "on_hand") {
     const low = Number(v) <= Number(rec.data.reorder_level);
