@@ -409,7 +409,9 @@ export function AppShell() {
             </div>
           </div>
         </header>
-        <main className="safe-bottom mx-auto w-full max-w-7xl flex-1 px-4 pb-8 pt-4 sm:px-6 lg:pt-6">
+        {/* The bottom padding matches the sidebar's 12px gap from the window edge, so the last card lines up with it.
+            It includes the safe-area inset here because the safe-bottom utility would replace the padding outright. */}
+        <main className="mx-auto w-full max-w-7xl flex-1 px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] pt-4 sm:px-6 md:pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] lg:pt-6">
           <div key={path} className="duration-500 ease-fluid animate-in fade-in-0 slide-in-from-bottom-2">
             <Outlet />
           </div>
