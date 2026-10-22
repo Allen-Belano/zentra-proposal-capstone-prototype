@@ -7,10 +7,10 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LevelDot, Money, PageHeader, StageBadge, StatCard } from "@/components/app/bits";
-import { MonthPicker } from "@/components/app/month-picker";
+import { DatePicker, MonthPicker } from "@/components/app/date-picker";
 import { delayReason, STAGE_INFO, type OrderStage } from "@/lib/orders";
 import { ROLE_LABEL, can, canViewDailySummary, canViewMonthlyMetrics, moduleAccess, POSITION_LABEL, POSITIONS, titleOf } from "@/lib/rbac";
 import { PAGE_LABEL, stageLabel, TERM_HELP } from "@/lib/terms";
@@ -57,12 +57,47 @@ export function DailySummary({ className }: { className?: string }) {
   return <DailySummaryCard className={className} />;
 }
 
+type SummaryRange = "day" | "week" | "month" | "year" | "custom";
+const RANGE_LABEL: Record<SummaryRange, string> = { day: "Day", week: "Week", month: "Month", year: "Year", custom: "Custom" };
+const SHORT_DAY = new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", month: "short", day: "numeric" });
+const YEAR_DAY = new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" });
+const utcKey = (d: Date) => d.toISOString().slice(0, 10);
+
+/** First and last day ("YYYY-MM-DD") of the period around `day`. Weeks run Monday to Sunday. */
+function rangeOf(kind: SummaryRange, day: string, from: string, to: string): [string, string] {
+  const d = new Date(`${day}T00:00:00Z`);
+  const y = d.getUTCFullYear(), m = d.getUTCMonth();
+  if (kind === "week") {
+    const monday = new Date(d); monday.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+    const sunday = new Date(monday); sunday.setUTCDate(monday.getUTCDate() + 6);
+    return [utcKey(monday), utcKey(sunday)];
+  }
+  if (kind === "month") return [utcKey(new Date(Date.UTC(y, m, 1))), utcKey(new Date(Date.UTC(y, m + 1, 0)))];
+  if (kind === "year") return [`${y}-01-01`, `${y}-12-31`];
+  if (kind === "custom") return from <= to ? [from, to] : [to, from];
+  return [day, day];
+}
+
+function rangeText(kind: SummaryRange, [a, b]: [string, string]) {
+  const A = new Date(`${a}T00:00:00Z`), B = new Date(`${b}T00:00:00Z`);
+  if (kind === "day") return `on ${LONG_DAY.format(A)}`;
+  if (kind === "month") return `in ${MONTH.format(A)}`;
+  if (kind === "year") return `in ${a.slice(0, 4)}`;
+  if (a === b) return `on ${LONG_DAY.format(A)}`;
+  return `from ${(a.slice(0, 4) === b.slice(0, 4) ? SHORT_DAY : YEAR_DAY).format(A)} to ${YEAR_DAY.format(B)}`;
+}
+
 function DailySummaryCard({ className }: { className?: string }) {
   const orders = useOrders();
   const today = dayKey(new Date());
+  const [kind, setKind] = useState<SummaryRange>("day");
   const [day, setDay] = useState(today);
+  const [from, setFrom] = useState(today);
+  const [to, setTo] = useState(today);
+  const [start, end] = rangeOf(kind, day, from, to);
   const { processes, byRole, paid, unpaid } = useMemo(() => {
-    const processes = orders.flatMap((o) => o.order!.log.filter((e) => dayKey(e.at) === day).map((e) => ({ e, o })));
+    const inRange = (at: string) => { const k = dayKey(at); return k >= start && k <= end; };
+    const processes = orders.flatMap((o) => o.order!.log.filter((e) => inRange(e.at)).map((e) => ({ e, o })));
     const byRole = [
       ...POSITIONS.map((p) => ({ label: POSITION_LABEL[p], n: processes.filter((x) => x.e.position === p).length })),
       { label: "New from Bitrix24", n: processes.filter((x) => x.e.by === "Bitrix24").length },
@@ -71,8 +106,8 @@ function DailySummaryCard({ className }: { className?: string }) {
     for (const { e, o } of processes) touched.set(o.id, { o, last: e.description });
     const list = [...touched.values()];
     return { processes, byRole, paid: list.filter((x) => x.o.data.payment === "Paid"), unpaid: list.filter((x) => x.o.data.payment !== "Paid") };
-  }, [orders, day]);
-  const label = LONG_DAY.format(new Date(`${day}T00:00:00Z`));
+  }, [orders, start, end]);
+  const label = rangeText(kind, [start, end]);
 
   const column = (title: string, tone: "success" | "warning", rows: typeof paid) => (
     <div className="min-w-0 rounded-2xl bg-muted p-4">
@@ -84,7 +119,7 @@ function DailySummaryCard({ className }: { className?: string }) {
           {rows.length} order{rows.length === 1 ? "" : "s"} · <Money value={rows.reduce((a, x) => a + Number(x.o.data.amount), 0)} />
         </span>
       </div>
-      {rows.length === 0 ? <p className="py-2 text-xs text-muted-foreground">None on this day</p> : (
+      {rows.length === 0 ? <p className="py-2 text-xs text-muted-foreground">{kind === "day" ? "None on this day" : "None in this period"}</p> : (
         <ul className="flex flex-col gap-1">
           {rows.map(({ o, last }) => (
             <li key={o.id}>
@@ -107,11 +142,22 @@ function DailySummaryCard({ className }: { className?: string }) {
       <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-1">
           <CardTitle>Daily process summary</CardTitle>
-          <CardDescription>Stages completed and orders handled on {label}</CardDescription>
+          <CardDescription>Stages completed and orders handled {label}</CardDescription>
         </div>
-        <div className="flex items-center gap-2">
-          {day !== today && <Button variant="ghost" size="sm" onClick={() => setDay(today)}>Today</Button>}
-          <Input type="date" value={day} max={today} onChange={(e) => e.target.value && setDay(e.target.value)} className="h-10 w-40" aria-label="Summary date" />
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <Select value={kind} onValueChange={(v) => setKind(v as SummaryRange)}>
+            <SelectTrigger className="h-10 w-28" aria-label="Summary period"><SelectValue /></SelectTrigger>
+            <SelectContent>{(Object.keys(RANGE_LABEL) as SummaryRange[]).map((k) => <SelectItem key={k} value={k}>{RANGE_LABEL[k]}</SelectItem>)}</SelectContent>
+          </Select>
+          {kind === "custom" ? (
+            <>
+              <DatePicker value={from} max={today} onChange={setFrom} className="w-40" aria-label="From" />
+              <span className="text-xs text-muted-foreground">to</span>
+              <DatePicker value={to} max={today} onChange={setTo} className="w-40" aria-label="To" />
+            </>
+          ) : (
+            <DatePicker value={day} max={today} onChange={setDay} className="w-40" aria-label={kind === "day" ? "Summary date" : `A day in the ${kind}`} />
+          )}
         </div>
       </CardHeader>
       <CardContent className="grid gap-4">

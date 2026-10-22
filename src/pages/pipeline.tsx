@@ -36,7 +36,7 @@ function RunStatus({ run }: { run: PipelineRun }) {
 function RunDialog({ open, onOpenChange, onDone }: { open: boolean; onOpenChange: (o: boolean) => void; onDone: () => void }) {
   const modules = useApp((s) => s.modules.filter((m) => m.active));
   const runPipeline = useApp((s) => s.runPipeline);
-  const [moduleId, setModuleId] = useState("ims");
+  const [moduleId, setModuleId] = useState(modules[0]?.id ?? "ims");
   const [file, setFile] = useState<{ name: string; text: string } | null>(null);
   const [stage, setStage] = useState(-1);
   const [result, setResult] = useState<PipelineRun | null>(null);
@@ -249,7 +249,7 @@ function RulesTab() {
   const modules = useApp((s) => s.modules.filter((m) => m.active));
   const rules = useApp((s) => s.rules);
   const { toggleRule, addRule, removeRule } = useApp.getState();
-  const [moduleId, setModuleId] = useState("ims");
+  const [moduleId, setModuleId] = useState(modules[0]?.id ?? "ims");
   const mod = modules.find((m) => m.id === moduleId) ?? modules[0];
   const [field, setField] = useState("");
   const [kind, setKind] = useState<RuleKind>("required");
@@ -342,7 +342,8 @@ export function PipelinePage() {
   const openRejected = useApp((s) => s.rejected.filter((r) => r.status === "open").length);
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState("runs");
-  const sorted = [...runs].reverse();
+  const [runStatus, setRunStatus] = useState<"all" | PipelineRun["status"]>("all");
+  const sorted = [...runs].reverse().filter((r) => runStatus === "all" || r.status === runStatus);
 
   return (
     <>
@@ -363,6 +364,18 @@ export function PipelinePage() {
         </TabsList>
         <TabsContent value="runs">
           <Card>
+            <div className="flex justify-end border-b p-4">
+              <Select value={runStatus} onValueChange={(v) => setRunStatus(v as typeof runStatus)}>
+                <SelectTrigger className="w-full sm:w-52" aria-label="Status"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Any status</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="completed_with_errors">Completed with errors</SelectItem>
+                  <SelectItem value="failed">Failed</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {sorted.length === 0 ? <EmptyState title="No imports with this status" description="Choose another status to see more imports." /> : (
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
@@ -396,6 +409,7 @@ export function PipelinePage() {
                 ))}
               </TableBody>
             </Table>
+            )}
           </Card>
         </TabsContent>
         <TabsContent value="rejected"><RejectedTab /></TabsContent>

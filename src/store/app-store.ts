@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { makeSeed } from "@/data/seed";
 import { actionOwner, actionsFor, ORDER_ACTIONS, type OrderStage } from "@/lib/orders";
-import { can, canActAs, canViewFinancials, moduleAccess, POSITION_LABEL } from "@/lib/rbac";
+import { can, canActAs, canExport, canViewFinancials, moduleAccess, POSITION_LABEL } from "@/lib/rbac";
 import { recordLabel, transformRow, validateRow } from "@/lib/validation";
 import { stageLabel } from "@/lib/terms";
 import type {
@@ -46,6 +46,7 @@ interface AppState extends Omit<Seed, "backupSchedule"> {
   addRecord: (moduleId: string, data: Row) => Result;
   updateRecord: (recordId: string, data: Row) => Result;
   setArchived: (recordId: string, archived: boolean) => Result;
+  logExport: (moduleId: string, count: number) => void;
   advanceOrder: (recordId: string, actionId: string, docs: Partial<Record<keyof OrderDocs, string>>) => Result;
 
   runPipeline: (moduleId: string, source: string, rows: Row[]) => PipelineRun;
@@ -296,6 +297,11 @@ export const useApp = create<AppState>()(
           patchRecord(recordId, { archived, updatedAt: now(), updatedBy: actorName() });
           audit(archived ? "Archived record" : "Restored record", `${m.name}: ${recordLabel(m, rec.data)}`);
           return { ok: true };
+        },
+
+        logExport: (moduleId, count) => {
+          if (!canExport(me())) return;
+          audit("Exported a CSV file", `${mod(moduleId).name}: ${count} record${count === 1 ? "" : "s"}`);
         },
 
         advanceOrder: (recordId, actionId, docs) => {
@@ -624,8 +630,8 @@ export const useApp = create<AppState>()(
       };
     },
     {
-      // v6: renamed terms (Accounting stage, Supplier P.O, Vendor P.O). Older saved demos start fresh.
-      name: "zentra-demo-v6",
+      // v7: Operations is the first module. Older saved demos start fresh.
+      name: "zentra-demo-v7",
       storage: createJSONStorage(() => {
         try {
           localStorage.setItem("__t", "1");

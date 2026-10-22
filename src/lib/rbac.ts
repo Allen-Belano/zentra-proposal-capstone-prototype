@@ -78,10 +78,17 @@ export function jobTitleOf(user: User): string {
 export function moduleAccess(user: User | null | undefined, moduleId: string): ModuleAccess {
   if (!user || user.status !== "active") return "none";
   if (user.role === "dept_head") return "edit";
+  // IT Administration reads the baseline lists (for exports and data requests) but never edits them.
+  if (user.role === "super_admin") return moduleId === "ims" || moduleId === "operations" ? "view" : "none";
   if (user.role !== "employee") return "none";
   if (moduleId === "ims") return user.position === "inventory" ? "edit" : "view";
   if (moduleId === "operations") return user.position ? "view" : "none";
   return user.moduleAccess[moduleId] ?? "none";
+}
+
+/** Export CSV: the Operations Department Head and IT Administration. */
+export function canExport(user: User | null | undefined): boolean {
+  return !!user && user.status === "active" && (user.role === "dept_head" || user.role === "super_admin");
 }
 
 /** Whether the user may see order amounts, unit costs, payments, and receivables. */

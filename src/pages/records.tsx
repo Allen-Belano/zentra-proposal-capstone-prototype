@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { Archive, ArchiveRestore, CloudOff, Eye, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Zap } from "lucide-react";
+import { Archive, ArchiveRestore, CloudOff, Download, Eye, MoreHorizontal, Pencil, Plus, RefreshCw, Search, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,16 +14,38 @@ import { EmptyState, Money, PageHeader, PaymentBadge, StageBadge, SyncBadge, use
 import { Forbidden } from "@/components/app/guard";
 import { confirmAction } from "@/components/app/confirm";
 import { RecordForm } from "@/components/app/record-form";
-import { can, moduleAccess } from "@/lib/rbac";
+import { can, canExport, moduleAccess } from "@/lib/rbac";
 import type { ModuleField, RecordItem } from "@/lib/types";
 import { stageLabel } from "@/lib/terms";
-import { cn, formatDate, timeAgo } from "@/lib/utils";
+import { cn, formatDate, formatDateTime, timeAgo } from "@/lib/utils";
 import { recordLabel } from "@/lib/validation";
 import { useApp, useMe, waitForSync } from "@/store/app-store";
 
 // With the sidebar open, a 1280px laptop leaves about as much room as a tablet, so tablet-hidden columns wait for xl.
 const hideCls = (f: ModuleField) =>
   cn(f.hideOnTablet ? "hidden xl:table-cell" : f.hideOnMobile && "hidden lg:table-cell");
+
+const csvCell = (v: unknown) => {
+  const s = v === undefined || v === null ? "" : String(v);
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+/** Downloads the rows on screen (search and filters applied) as a CSV file, with every column. */
+function downloadCsv(fields: ModuleField[], rows: RecordItem[], name: string) {
+  const header = [...fields.map((f) => f.label), "Last updated", "Updated by"];
+  const lines = rows.map((r) => [
+    ...fields.map((f) => (f.key === "stage" && r.order ? stageLabel(String(r.data[f.key])) : r.data[f.key])),
+    formatDateTime(r.updatedAt), r.updatedBy,
+  ]);
+  const csv = [header, ...lines].map((row) => row.map(csvCell).join(",")).join("\r\n");
+  // The byte-order mark makes Excel read the peso sign and accents correctly.
+  const url = URL.createObjectURL(new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `${name.toLowerCase().replace(/\s+/g, "-")}-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 function Cell({ field, rec }: { field: ModuleField; rec: RecordItem }) {
   const v = rec.data[field.key];
@@ -89,6 +111,9 @@ export function RecordsPage() {
   if (!mod || !mod.active) return <Forbidden message="This system doesn't exist, or it was turned off by the Operations Department Head." />;
   if (access === "none") return <Forbidden />;
   const canEdit = access === "edit";
+  // Orders come from Bitrix24 (or a file import), so Operations has no Add button.
+  const canAdd = canEdit && mod.id !== "operations";
+  const logExport = useApp.getState().logExport;
   const isHead = can(me, "sync.manage");
   const external = mod.kind === "external";
   // Phone cards lead with the primary field and show the rest of the always-visible columns beneath it.
@@ -137,7 +162,14 @@ export function RecordsPage() {
             {external && (
               <Button variant="outline" onClick={() => syncNow(mod.id)}><RefreshCw />Update now</Button>
             )}
-            {canEdit && <Button onClick={() => setCreating(true)}><Plus />Add {mod.recordName.toLowerCase()}</Button>}
+            {canExport(me) && (
+              <Button variant="outline" disabled={!records.length} onClick={() => {
+                downloadCsv(mod.fields, records, mod.name);
+                logExport(mod.id, records.length);
+                toast.success(`Exported ${records.length} ${mod.recordName.toLowerCase()}${records.length === 1 ? "" : "s"}`, { description: "The CSV file has the rows shown, with every column." });
+              }}><Download />Export CSV</Button>
+            )}
+            {canAdd && <Button onClick={() => setCreating(true)}><Plus />Add {mod.recordName.toLowerCase()}</Button>}
             {!canEdit && (
               <Badge variant="secondary" className="h-9 gap-1.5 px-3.5 text-sm [&_svg]:size-4">
                 <Eye />{external ? "Orders move through each stage" : "View only"}
@@ -188,8 +220,8 @@ export function RecordsPage() {
         {records.length === 0 ? (
           <EmptyState
             title={query || filter !== "all" ? "No matching records" : view === "archived" ? "No archived records" : `No ${mod.recordName.toLowerCase()}s yet`}
-            description={query || filter !== "all" ? "Try a different search or filter." : canEdit && view === "active" ? `Add the first ${mod.recordName.toLowerCase()}, or import a file from File imports.` : view === "archived" ? "Records you archive will show up here." : undefined}
-            action={canEdit && view === "active" && !query && filter === "all"
+            description={query || filter !== "all" ? "Try a different search or filter." : canAdd && view === "active" ? `Add the first ${mod.recordName.toLowerCase()}, or import a file from File imports.` : view === "archived" ? "Records you archive will show up here." : undefined}
+            action={canAdd && view === "active" && !query && filter === "all"
               ? <Button onClick={() => setCreating(true)}><Plus />Add {mod.recordName.toLowerCase()}</Button>
               : undefined}
           />

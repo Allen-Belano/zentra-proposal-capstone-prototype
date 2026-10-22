@@ -34,21 +34,6 @@ export function makeSeed() {
 
   const modules: ModuleDef[] = [
     {
-      id: "ims", name: "Inventory", recordName: "Item", icon: "package",
-      description: "Stock levels, reorder points, and storage locations.",
-      kind: "native", owner: "Operations · Inventory", adapter: { type: "native", frequency: "realtime" }, active: true, baseline: true,
-      registeredAt: ago(60 * 24 * 30), registeredBy: "Carlo Reyes",
-      fields: [
-        { key: "sku", label: "Item code", type: "text" },
-        { key: "name", label: "Item name", type: "text", primary: true },
-        { key: "category", label: "Category", type: "select", options: ["Displays", "Batteries", "Components", "Accessories", "Consumables"], hideOnMobile: true },
-        { key: "on_hand", label: "On hand", type: "number" },
-        { key: "reorder_level", label: "Reorder at", type: "number", hideOnMobile: true },
-        { key: "unit_cost", label: "Unit cost", type: "currency", hideOnMobile: true, financial: true },
-        { key: "location", label: "Location", type: "text", hideOnMobile: true, hideOnTablet: true },
-      ],
-    },
-    {
       id: "operations", name: "Operations", recordName: "Order", icon: "truck",
       description: "Orders confirmed in Bitrix24, from Accounting to Collection.",
       kind: "external", source: "Bitrix24", owner: "Operations",
@@ -70,6 +55,21 @@ export function makeSeed() {
         { key: "stage", label: "Stage", type: "select", options: [...ORDER_STAGES] },
         { key: "payment", label: "Payment", type: "select", options: [...PAYMENT_STATUSES] },
         { key: "due_date", label: "Due", type: "date", hideOnMobile: true },
+      ],
+    },
+    {
+      id: "ims", name: "Inventory", recordName: "Item", icon: "package",
+      description: "Stock levels, reorder points, and storage locations.",
+      kind: "native", owner: "Operations · Inventory", adapter: { type: "native", frequency: "realtime" }, active: true, baseline: true,
+      registeredAt: ago(60 * 24 * 30), registeredBy: "Carlo Reyes",
+      fields: [
+        { key: "sku", label: "Item code", type: "text" },
+        { key: "name", label: "Item name", type: "text", primary: true },
+        { key: "category", label: "Category", type: "select", options: ["Displays", "Batteries", "Components", "Accessories", "Consumables"], hideOnMobile: true },
+        { key: "on_hand", label: "On hand", type: "number" },
+        { key: "reorder_level", label: "Reorder at", type: "number", hideOnMobile: true },
+        { key: "unit_cost", label: "Unit cost", type: "currency", hideOnMobile: true, financial: true },
+        { key: "location", label: "Location", type: "text", hideOnMobile: true, hideOnTablet: true },
       ],
     },
   ];

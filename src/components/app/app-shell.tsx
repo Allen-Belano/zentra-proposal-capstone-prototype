@@ -29,8 +29,6 @@ function useNav() {
   const issues = useApp((s) => s.syncOps.filter((o) => o.status === "conflict" || o.status === "failed").length);
   const openRejected = useApp((s) => s.rejected.filter((r) => r.status === "open").length);
   const p = (perm: Permission) => can(me, perm);
-  // Operations comes first: it's where the order flow lives. Modules added later keep their registered order.
-  const moduleRank = (id: string) => (id === "operations" ? 0 : id === "ims" ? 1 : 2);
 
   const sections: { title?: string; items: NavItem[] }[] = [
     { items: p("dashboard.view") ? [{ to: "/", label: "Overview", icon: <LayoutDashboard /> }] : [] },
@@ -38,7 +36,6 @@ function useNav() {
       title: "Modules",
       items: modules
         .filter((m) => m.active && moduleAccess(me, m.id) !== "none")
-        .sort((a, b) => moduleRank(a.id) - moduleRank(b.id))
         .map((m) => ({ to: `/modules/${m.id}`, label: m.name, icon: <ModuleIcon name={m.icon} /> })),
     },
     {
