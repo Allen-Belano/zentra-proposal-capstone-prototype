@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { makeSeed } from "@/data/seed";
 import { actionOwner, actionsFor, ORDER_ACTIONS, STAGE_INFO, type OrderStage } from "@/lib/orders";
-import { isOpenOverdue, overdueReasonOf, slaOf } from "@/lib/sla";
+import { isOpenOverdue, overdueReasonOf, paymentDueOf, slaOf } from "@/lib/sla";
 import { can, canActAs, canExport, canViewFinancials, moduleAccess, POSITION_LABEL } from "@/lib/rbac";
 import { recordLabel, transformRow, validateRow } from "@/lib/validation";
 import { stageLabel } from "@/lib/terms";
@@ -315,7 +315,9 @@ export const useApp = create<AppState>()(
           const owner = STAGE_INFO[rec.data.stage as OrderStage]?.owner;
           if (!canActAs(u, owner)) return { ok: false, errors: [`Only ${owner ? POSITION_LABEL[owner] : "the assigned role"} can report a delay on this order.`] };
           const sla = slaOf(rec);
-          if (rec.data.stage === "Done" || !sla || (!sla.late && !sla.hardToSource)) return { ok: false, errors: ["This order is within its delivery limit."] };
+          const payLate = rec.data.stage === "Collection" && paymentDueOf(rec)?.state !== "on_track" && !!paymentDueOf(rec);
+          if (rec.data.stage === "Collection" ? !payLate : (rec.data.stage === "Done" || !sla || (!sla.late && !sla.hardToSource)))
+            return { ok: false, errors: [rec.data.stage === "Collection" ? "This payment isn't overdue." : "This order is within its delivery limit."] };
           const text = note.trim();
           if (!text) return { ok: false, errors: ["Write a short note about the delay"] };
           const m = mod(rec.moduleId);
@@ -671,8 +673,8 @@ export const useApp = create<AppState>()(
       };
     },
     {
-      // v10: overdue states, reported delays, and overdue alerts. Older saved demos start fresh.
-      name: "zentra-demo-v10",
+      // v11: payment terms. Older saved demos start fresh.
+      name: "zentra-demo-v11",
       storage: createJSONStorage(() => {
         try {
           localStorage.setItem("__t", "1");

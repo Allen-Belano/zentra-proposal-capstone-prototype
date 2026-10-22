@@ -3,6 +3,7 @@ import type {
   RecordItem, RejectedRow, RemoteRecord, SyncOperation, User, ValidationRule,
 } from "@/lib/types";
 import { ORDER_STAGES, PAYMENT_STATUSES, type OrderStage } from "@/lib/orders";
+import { PAYMENT_TERMS } from "@/lib/sla";
 
 const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 const daysFromNow = (d: number) => new Date(Date.now() + d * 86_400_000).toISOString().slice(0, 10);
@@ -43,6 +44,7 @@ export function makeSeed() {
         mapping: {
           order_no: "TITLE", customer: "COMPANY_TITLE", client_po: "UF_CRM_CLIENT_PO", items: "UF_CRM_ITEMS",
           amount: "OPPORTUNITY", stage: "STAGE_ID", payment: "UF_CRM_PAYMENT", due_date: "CLOSEDATE",
+          payment_terms: "UF_CRM_PAYMENT_TERMS",
         },
       },
       active: true, baseline: true, registeredAt: ago(60 * 24 * 30), registeredBy: "Carlo Reyes", lastSyncedAt: ago(8),
@@ -55,6 +57,7 @@ export function makeSeed() {
         { key: "stage", label: "Stage", type: "select", options: [...ORDER_STAGES] },
         { key: "payment", label: "Payment", type: "select", options: [...PAYMENT_STATUSES] },
         { key: "due_date", label: "Deliver by", type: "date", hideOnMobile: true },
+        { key: "payment_terms", label: "Payment terms", type: "select", options: [...PAYMENT_TERMS], detailOnly: true },
       ],
     },
     {
@@ -93,13 +96,13 @@ export function makeSeed() {
   // ORD-1041 just arrived for Accounting and is walked through every stage live.
   // ORD-1042 has waited for a hard-to-source supplier for 6 days, past the 5-day limit, with a reason on record.
   // ORD-1043 was delivered 5 days after entering Purchasing, past the 3-day limit with no reason, and is now in Collection.
-  const orderSpecs: { no: string; customer: string; clientPo: string; items: string; amount: number; stage: OrderStage; payment: "Paid" | "Unpaid"; due: number; steps: Step[] }[] = [
-    { no: "ORD-1041", customer: "Northgate Logistics Inc.", clientPo: "CPO-60311", items: "8x Desktop PC (Core i5, 16GB)", amount: 364000, stage: "Accounting", payment: "Unpaid", due: 5,
+  const orderSpecs: { no: string; customer: string; clientPo: string; items: string; amount: number; stage: OrderStage; payment: "Paid" | "Unpaid"; terms: (typeof PAYMENT_TERMS)[number]; due: number; steps: Step[] }[] = [
+    { no: "ORD-1041", customer: "Northgate Logistics Inc.", clientPo: "CPO-60311", items: "8x Desktop PC (Core i5, 16GB)", amount: 364000, stage: "Accounting", payment: "Unpaid", terms: "30 days", due: 5,
       steps: [wonAt(40)] },
-    { no: "ORD-1042", customer: "Marikina City Hall IT Office", clientPo: "CPO-60287", items: "4x 24-port PoE network switch", amount: 88000, stage: "Order basis", payment: "Unpaid", due: 2,
+    { no: "ORD-1042", customer: "Marikina City Hall IT Office", clientPo: "CPO-60287", items: "4x 24-port PoE network switch", amount: 88000, stage: "Order basis", payment: "Unpaid", terms: "15 days", due: 2,
       steps: [wonAt(6.4 * D), ["Accounting", "Cleared by Accounting: no unpaid balance", "accounting", 6.2 * D],
         ["Purchasing", "Vendor P.O SPO-3331 issued; the order waits for the supplier (long lead time)", "purchasing", 6 * D, { supplierPo: "SPO-3331" }]] },
-    { no: "ORD-1043", customer: "Summit Ridge Accounting Firm", clientPo: "CPO-60254", items: "6x 4-camera IP security kit", amount: 177000, stage: "Collection", payment: "Unpaid", due: -3,
+    { no: "ORD-1043", customer: "Summit Ridge Accounting Firm", clientPo: "CPO-60254", items: "6x 4-camera IP security kit", amount: 177000, stage: "Collection", payment: "Unpaid", terms: "30 days", due: -3,
       steps: [wonAt(9.5 * D), ["Accounting", "Cleared by Accounting: no unpaid balance", "accounting", 9.3 * D],
         ["Purchasing", "Vendor P.O SPO-3324 issued for the missing items", "purchasing", 9 * D, { supplierPo: "SPO-3324" }],
         ["Receiving", "Supplier delivery received; receiving report RR-2231 posted", "inventory", 6.5 * D, { rr: "RR-2231" }],
@@ -118,7 +121,7 @@ export function makeSeed() {
     const last = log.at(-1)!;
     return {
       id: `ops-${i + 1}`, moduleId: "operations",
-      data: { order_no: o.no, customer: o.customer, client_po: o.clientPo, items: o.items, amount: o.amount, stage: o.stage, payment: o.payment, due_date: daysFromNow(o.due) },
+      data: { order_no: o.no, customer: o.customer, client_po: o.clientPo, items: o.items, amount: o.amount, stage: o.stage, payment: o.payment, due_date: daysFromNow(o.due), payment_terms: o.terms },
       order: { docs, log },
       archived: false, syncState: (i === 1 ? "conflict" : "synced") as RecordItem["syncState"],
       externalId: `DEAL-${7710 + i}`, syncedVersion: 1,
@@ -144,7 +147,7 @@ export function makeSeed() {
 
   /** A deal won in Bitrix24 that hasn't been pulled into Zentra yet. It's incomplete on purpose, so "Update now" shows a record that needs fixing without adding a fourth order. */
   const remoteInbox: Record<string, string>[] = [
-    { order_no: "ORD-1044", customer: "", client_po: "CPO-60330", items: "12x Wireless keyboard and mouse set", amount: "21600", stage: "Accounting", payment: "Unpaid", due_date: daysFromNow(7) },
+    { order_no: "ORD-1044", customer: "", client_po: "CPO-60330", items: "12x Wireless keyboard and mouse set", amount: "21600", stage: "Accounting", payment: "Unpaid", due_date: daysFromNow(7), payment_terms: "30 days" },
   ];
 
   const rules: ValidationRule[] = [

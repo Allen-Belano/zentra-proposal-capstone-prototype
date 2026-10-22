@@ -10,10 +10,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Money, OverdueBadge, PageHeader, PaymentBadge, StageBadge, SyncBadge } from "@/components/app/bits";
+import { Money, OverdueBadge, PageHeader, PaymentBadge, PaymentDueBadge, StageBadge, SyncBadge } from "@/components/app/bits";
 import { Forbidden } from "@/components/app/guard";
 import { actionOwner, actionsFor, delayReason, STAGE_INFO, TRACK, trackIndex, type OrderAction, type OrderStage } from "@/lib/orders";
-import { overdueReasonOf, overdueStateOf, slaOf } from "@/lib/sla";
+import { overdueReasonOf, overdueStateOf, paymentDueOf, slaOf } from "@/lib/sla";
 import { canActAs, moduleAccess, POSITION_LABEL, ROLE_LABEL } from "@/lib/rbac";
 import { DOC_LABEL, stageLabel } from "@/lib/terms";
 import type { OrderDocs, OrderLogEntry, RecordItem } from "@/lib/types";
@@ -202,7 +202,9 @@ function NextStep({ rec }: { rec: RecordItem }) {
   const actions = actionsFor(rec);
   const mine = actions.filter((a) => canActAs(me, actionOwner(rec, a)));
   // Any overdue order, or a hard-to-source one, can get a note from its stage owner.
-  const canReport = canActAs(me, owner) && !!sla && (sla.late || sla.hardToSource);
+  const pay = paymentDueOf(rec);
+  // At Collection, a reported delay is about the payment; before it, about the delivery.
+  const canReport = canActAs(me, owner) && (stage === "Collection" ? !!pay && pay.state !== "on_track" : !!sla && (sla.late || sla.hardToSource));
   const run = async (a: OrderAction) => {
     if (a.docs?.length) return setPending(a);
     if (!(await confirmAction({ title: `${a.label}?`, description: `${rec.data.order_no} · ${a.hint} ${outcome(rec, a)}`, confirmLabel: a.label }))) return;
@@ -242,6 +244,12 @@ function NextStep({ rec }: { rec: RecordItem }) {
               </div>
             )}
             {sla?.late && <p className="mt-1.5 text-sm"><span className="font-medium">Reason:</span> <span className="text-muted-foreground">{reason ?? "None recorded yet."}</span></p>}
+            {pay && (
+              <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                <PaymentDueBadge rec={rec} />
+                <span>Payment due {formatDate(pay.due)} ({pay.terms === "Cash on delivery" ? "cash on delivery" : `${pay.terms} after delivery`}).{pay.reason && ` ${pay.reason}`}</span>
+              </div>
+            )}
           </div>
         </div>
         {mine.length > 0 || canReport ? (
@@ -364,6 +372,8 @@ export function OrderDetailPage() {
                 <Row label="Items">{rec.data.items}</Row>
                 <Row label="Amount"><Money value={rec.data.amount} /></Row>
                 <Row label="Payment"><PaymentBadge status={String(rec.data.payment)} /></Row>
+                <Row label="Payment terms">{String(rec.data.payment_terms || "—")}</Row>
+                {paymentDueOf(rec) && <Row label="Payment due">{formatDate(paymentDueOf(rec)!.due)}</Row>}
                 <Row label="Deliver by">{sla ? `${formatDate(sla.deadline)} (${sla.days} days${sla.hardToSource ? ", hard to source" : ""})` : "Starts when the order reaches Purchasing"}</Row>
                 {sla?.deliveredAt && <Row label="Delivered">{formatDateTime(sla.deliveredAt)}</Row>}
                 <Row label="Order confirmed">{formatDateTime(rec.createdAt)}</Row>

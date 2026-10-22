@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { stageVariant, STAGE_INFO, type OrderStage } from "@/lib/orders";
-import { overdueReasonOf, overdueStateOf, slaOf } from "@/lib/sla";
+import { overdueReasonOf, overdueStateOf, paymentDueOf, slaOf } from "@/lib/sla";
 import { canViewFinancials, POSITION_LABEL } from "@/lib/rbac";
 import { stageLabel } from "@/lib/terms";
 import type { EventLevel, RecordItem, SyncState } from "@/lib/types";
@@ -145,6 +145,23 @@ export function OverdueBadge({ rec, compact }: { rec: RecordItem; compact?: bool
         </Badge>
       </TooltipTrigger>
       <TooltipContent className="max-w-xs">{late}. {reason ?? "No reason recorded."}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** A delivered, unpaid order's payment due date: grey on time, orange with a reason, red without. */
+export function PaymentDueBadge({ rec }: { rec: RecordItem }) {
+  const p = paymentDueOf(rec);
+  if (!p) return null;
+  if (p.state === "on_track") return <Badge variant="secondary" className="whitespace-nowrap">Pay by {new Intl.DateTimeFormat("en-PH", { month: "short", day: "numeric", timeZone: "Asia/Manila" }).format(new Date(p.due))}</Badge>;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Badge variant={p.state === "justified" ? "warning" : "destructive"} tabIndex={0} className="cursor-default whitespace-nowrap">
+          {p.state === "justified" ? "Payment overdue · justified" : "Payment overdue"}
+        </Badge>
+      </TooltipTrigger>
+      <TooltipContent className="max-w-xs">{p.lateDays} day{p.lateDays === 1 ? "" : "s"} past {p.terms} terms. {p.reason ?? "No reason recorded."}</TooltipContent>
     </Tooltip>
   );
 }

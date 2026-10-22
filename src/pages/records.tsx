@@ -125,7 +125,8 @@ export function RecordsPage() {
   const external = mod.kind === "external";
   // Phone cards lead with the primary field and show the rest of the always-visible columns beneath it.
   const primaryField = mod.fields.find((f) => f.primary) ?? mod.fields[0];
-  const cardFields = mod.fields.filter((f) => f !== primaryField && !f.hideOnMobile && !f.hideOnTablet);
+  const listFields = mod.fields.filter((f) => !f.detailOnly);
+  const cardFields = listFields.filter((f) => f !== primaryField && !f.hideOnMobile && !f.hideOnTablet);
 
   const actions = (r: RecordItem) => canEdit && (
     <DropdownMenu>
@@ -238,7 +239,7 @@ export function RecordsPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    {mod.fields.map((f) => (
+                    {listFields.map((f) => (
                       <TableHead key={f.key} className={hideCls(f)}>{f.label}</TableHead>
                     ))}
                     {external && <TableHead className="hidden xl:table-cell">Bitrix24</TableHead>}
@@ -253,7 +254,7 @@ export function RecordsPage() {
                       onClick={r.order ? () => navigate({ to: "/orders/$orderId", params: { orderId: r.id } }) : undefined}
                       className={r.order ? "cursor-pointer" : undefined}
                     >
-                      {mod.fields.map((f) => (
+                      {listFields.map((f) => (
                         <TableCell key={f.key} className={hideCls(f)}><Cell field={f} rec={r} /></TableCell>
                       ))}
                       {external && <TableCell className="hidden xl:table-cell"><SyncBadge state={r.syncState} /></TableCell>}

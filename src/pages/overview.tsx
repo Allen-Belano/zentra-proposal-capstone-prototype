@@ -9,10 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LevelDot, Money, OverdueBadge, PageHeader, StageBadge, StatCard } from "@/components/app/bits";
+import { LevelDot, Money, OverdueBadge, PageHeader, PaymentDueBadge, StageBadge, StatCard } from "@/components/app/bits";
 import { DatePicker, MonthPicker } from "@/components/app/date-picker";
 import { delayReason, STAGE_INFO, type OrderStage } from "@/lib/orders";
-import { purchasingToDeliveryDays, SLA_DAYS, slaOf } from "@/lib/sla";
+import { overdueForRole, purchasingToDeliveryDays, SLA_DAYS, slaOf } from "@/lib/sla";
 import { ROLE_LABEL, can, canViewDailySummary, canViewMonthlyMetrics, moduleAccess, POSITION_LABEL, POSITIONS, titleOf } from "@/lib/rbac";
 import { PAGE_LABEL, stageLabel, TERM_HELP } from "@/lib/terms";
 import type { RecordItem } from "@/lib/types";
@@ -339,7 +339,11 @@ function NeedsAttention() {
         </AttentionCard>
         <AttentionCard title="Unpaid orders" description="Delivered orders awaiting payment are listed first" empty="Every order is paid" count={a.unpaid.length}>
           {a.unpaid.map((o) => (
-            <OrderRow key={o.id} o={o} extra={<>{o.data.stage === "Collection" && <Badge variant="warning">Delivered</Badge>}<Money value={o.data.amount} className="text-xs" /></>} />
+            <OrderRow key={o.id} o={o} extra={<>
+              {o.data.payment_terms && <span className="text-xs text-muted-foreground">{String(o.data.payment_terms)}</span>}
+              {o.data.stage === "Collection" && (<PaymentDueBadge rec={o} />)}
+              <Money value={o.data.amount} className="text-xs" />
+            </>} />
           ))}
         </AttentionCard>
         <AttentionCard
@@ -391,6 +395,37 @@ function MyKpis({ className }: { className?: string }) {
       </div>
       <KpiCard k={mine} />
     </div>
+  );
+}
+
+/** C4: the role's open orders past their limit, red first. Accounting's are late payments. */
+function OverdueList() {
+  const me = useMe()!;
+  const orders = useOrders();
+  const list = me.position ? overdueForRole(orders, me.position, (o) => STAGE_INFO[o.data.stage as OrderStage]?.owner) : [];
+  const accounting = me.position === "accounting";
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Overdue</CardTitle>
+        <CardDescription>
+          {accounting
+            ? "Delivered orders past their payment due date (delivery date plus payment terms). Red has no reason recorded."
+            : `Orders at your stage past the delivery limit (${SLA_DAYS.standard} days from Purchasing, ${SLA_DAYS.hardToSource} if hard to source). Red has no reason recorded.`}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {list.length === 0 ? (
+          <p className="flex items-center gap-2 rounded-xl bg-success/5 px-3 py-2.5 text-sm text-success"><CheckCircle2 className="h-4 w-4" />Nothing overdue</p>
+        ) : (
+          <div className="flex flex-col gap-0.5">
+            {list.map(({ o }) => (
+              <OrderRow key={o.id} o={o} extra={accounting ? <PaymentDueBadge rec={o} /> : <OverdueBadge rec={o} />} />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -600,6 +635,7 @@ export function OverviewPage() {
 
   if (!can(me, "sync.manage")) {
     const mine = active.filter((o) => STAGE_INFO[o.data.stage as OrderStage]?.owner === me.position);
+    const overdue = me.position ? overdueForRole(orders, me.position, (o) => STAGE_INFO[o.data.stage as OrderStage]?.owner) : [];
     return (
       <>
         <PageHeader title={role} description={`Your ${me.position ? POSITION_LABEL[me.position].toLowerCase() : ""} tasks and today's numbers`} />
@@ -609,11 +645,25 @@ export function OverviewPage() {
           <StatCard label="Completed this month" value={completedThisMonth} icon={<UserCheck />} tone="success" hint="Delivered and paid" />
           <StatCard label="Low-stock items" value={lowStock.length} icon={<PackageX />} tone={lowStock.length ? "warning" : "default"} hint="At or below reorder level" />
         </div>
-        <div className="stagger mt-4 grid gap-4 lg:grid-cols-3">
-          <WaitingOnYou className={canViewDailySummary(me) ? "lg:col-span-1" : "lg:col-span-3"} />
-          {canViewDailySummary(me) && <DailySummary className="lg:col-span-2" />}
-          <MyKpis className="lg:col-span-3" />
-        </div>
+        <Tabs defaultValue="work" className="mt-4">
+          <TabsList className="mb-0">
+            <TabsTrigger value="work">My work</TabsTrigger>
+            <TabsTrigger value="overdue">
+              Overdue
+              {overdue.length > 0 && (
+                <span className={cn("rounded-full px-1.5 text-xs tabular", overdue.some((x) => x.state === "overdue") ? "bg-destructive/15 text-destructive" : "bg-warning/15 text-warning")}>{overdue.length}</span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="work">
+            <div className="stagger grid gap-4 lg:grid-cols-3">
+              <WaitingOnYou className={canViewDailySummary(me) ? "lg:col-span-1" : "lg:col-span-3"} />
+              {canViewDailySummary(me) && <DailySummary className="lg:col-span-2" />}
+              <MyKpis className="lg:col-span-3" />
+            </div>
+          </TabsContent>
+          <TabsContent value="overdue"><OverdueList /></TabsContent>
+        </Tabs>
       </>
     );
   }

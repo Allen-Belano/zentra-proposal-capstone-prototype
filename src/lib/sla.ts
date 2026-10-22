@@ -66,7 +66,8 @@ export type OverdueState = "on_track" | "justified" | "overdue";
 
 /** The reason on record for running past the limit: one staff reported, or hard to source. */
 export function overdueReasonOf(rec: RecordItem): string | null {
-  const reported = rec.order?.log.filter((e) => e.delay).at(-1);
+  // A delay reported during Collection explains a late payment, not a late delivery.
+  const reported = rec.order?.log.filter((e) => e.delay && e.stage !== "Collection").at(-1);
   if (reported) return `Outside our control: ${reported.note ?? "reported by staff"}`;
   return slaOf(rec)?.hardToSource ? "Hard to source: the order waited for the supplier" : null;
 }
@@ -83,3 +84,56 @@ export const isOpenOverdue = (rec: RecordItem, now = Date.now()) => {
   const sla = slaOf(rec, now);
   return !!sla && sla.late && !sla.deliveredAt && rec.data.stage !== "Done";
 };
+
+/** Payment terms on an order, in days after delivery. "Cash on delivery" is 0. */
+export const PAYMENT_TERMS = ["Cash on delivery", "15 days", "30 days"] as const;
+
+export function termsDaysOf(rec: RecordItem): number | null {
+  const t = String(rec.data.payment_terms ?? "");
+  if (!t) return null;
+  return t === "Cash on delivery" ? 0 : Number(t.match(/\d+/)?.[0] ?? NaN) || null;
+}
+
+export interface PaymentDue {
+  /** The day the client must pay by: the delivery date plus the terms. */
+  due: string;
+  terms: string;
+  state: OverdueState;
+  lateDays: number;
+  /** The reason Accounting reported for the late payment, if any. */
+  reason: string | null;
+}
+
+/** When a delivered, unpaid order must be paid, and whether that has passed. Null before delivery. */
+export function paymentDueOf(rec: RecordItem, now = Date.now()): PaymentDue | null {
+  const days = termsDaysOf(rec);
+  const delivered = deliveredAt(rec);
+  if (days === null || !delivered || rec.data.payment === "Paid") return null;
+  const due = new Date(new Date(delivered).getTime() + days * DAY).toISOString();
+  const over = now - new Date(due).getTime();
+  const reported = rec.order?.log.filter((e) => e.delay && e.stage === "Collection").at(-1);
+  const reason = reported ? `Outside our control: ${reported.note ?? "reported by Accounting"}` : null;
+  return {
+    due, terms: String(rec.data.payment_terms), reason,
+    state: over <= 0 ? "on_track" : reason ? "justified" : "overdue",
+    lateDays: over > 0 ? Math.ceil(over / DAY) : 0,
+  };
+}
+
+/**
+ * The orders on a role's Overdue tab, red before orange. Accounting's are unpaid orders past
+ * their payment due date; every other role's are its open orders past the delivery limit.
+ */
+export function overdueForRole(orders: RecordItem[], position: string, ownerOf: (rec: RecordItem) => string | undefined, now = Date.now()) {
+  const rank = (s: OverdueState | null | undefined) => (s === "overdue" ? 0 : 1);
+  if (position === "accounting") {
+    return orders
+      .map((o) => ({ o, state: paymentDueOf(o, now)?.state }))
+      .filter((x) => x.state === "overdue" || x.state === "justified")
+      .sort((a, b) => rank(a.state) - rank(b.state));
+  }
+  return orders
+    .filter((o) => ownerOf(o) === position && isOpenOverdue(o, now))
+    .map((o) => ({ o, state: overdueStateOf(o, now) }))
+    .sort((a, b) => rank(a.state) - rank(b.state));
+}
