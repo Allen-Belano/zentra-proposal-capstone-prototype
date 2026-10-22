@@ -16,6 +16,7 @@ import { confirmAction } from "@/components/app/confirm";
 import { RecordForm } from "@/components/app/record-form";
 import { can, moduleAccess } from "@/lib/rbac";
 import type { ModuleField, RecordItem } from "@/lib/types";
+import { stageLabel } from "@/lib/terms";
 import { cn, formatDate, timeAgo } from "@/lib/utils";
 import { recordLabel } from "@/lib/validation";
 import { useApp, useMe, waitForSync } from "@/store/app-store";
@@ -170,7 +171,7 @@ export function RecordsPage() {
                 <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Any {filterField.label.toLowerCase()}</SelectItem>
-                  {filterField.options.map((o) => <SelectItem key={o} value={o}>{o}</SelectItem>)}
+                  {filterField.options.map((o) => <SelectItem key={o} value={o}>{filterField.key === "stage" ? stageLabel(o) : o}</SelectItem>)}
                 </SelectContent>
               </Select>
             )}

@@ -38,8 +38,8 @@ Every account uses the password **`zentra2026`**. On the sign-in page you can al
 |---|---|---|---|
 | Super Admin | Maria Santos | superadmin@ifixz.com | Manages accounts, roles, financial access, and the audit log |
 | Operations Head | Carlo Reyes | depthead@ifixz.com | Oversees Operations, Sync, the data pipeline, and team roles |
-| Accounting | Jessa Cruz | jessa.accounting@ifixz.com | Credit checks and payments |
-| Purchasing | Mark Dizon | mark.purchasing@ifixz.com | Supplier purchase orders |
+| Accounting | Jessa Cruz | jessa.accounting@ifixz.com | Order clearing and payments |
+| Purchasing | Mark Dizon | mark.purchasing@ifixz.com | Vendor purchase orders |
 | Inventory | Ana Lim | ana.inventory@ifixz.com | Stock and receiving reports |
 | Invoicing | Paolo Garcia | paolo.invoicing@ifixz.com | Sales invoices and written reports |
 | Delivery | Lea Mendoza | lea.delivery@ifixz.com | Deliveries and delivery receipts |
@@ -81,9 +81,9 @@ An order starts when the client confirms it in Bitrix24. It then moves through s
 
 | Stage | Responsible role | What they do | Document produced |
 |---|---|---|---|
-| **Credit check** | Accounting | Check the client has no unpaid balance, then **Clear credit check**. If they do owe money, **Put on hold**. | — |
+| **Accounting** | Accounting | Check the client has no unpaid balance, then **Clear the order**. If they do owe money, **Put on hold**. | — |
 | On hold *(if needed)* | Accounting | When the client settles the old balance, click **Balance settled**. | — |
-| **Purchasing** | Purchasing | If everything is in stock: **Reserve from stock** (goes straight to Invoicing). Otherwise: **Issue supplier PO**, or **Wait for supplier** if items are hard to source. | Supplier purchase order (PO) |
+| **Purchasing** | Purchasing | If everything is in stock: **Reserve from stock** (goes straight to Invoicing). Otherwise: **Issue vendor P.O**, or **Wait for supplier** if items are hard to source. | Vendor P.O |
 | Waiting for supplier *(if needed)* | Purchasing | Wait for the supplier, then **Supplier items arrived**. | — |
 | **Receiving** | Inventory | Receive the supplier delivery and **Post receiving report**. | RR |
 | **Invoicing** | Invoicing | **Issue SI and WR** for the delivery. | SI and WR |
@@ -113,7 +113,7 @@ To work on an order:
 
 1. Open it from **Waiting on you**, the bell, or **Order tracking**.
 2. At the top, the order page says who it's waiting on and what's needed.
-3. If it's your stage, click your action button, such as **Issue supplier PO**.
+3. If it's your stage, click your action button, such as **Issue vendor P.O**.
 4. If the stage produces a document, Zentra suggests a number. Change it to the real document number, then click **Save**.
 
 The order moves to the next stage, the next role is notified, and the change is sent to Bitrix24. A message tells you whether it was sent.
@@ -122,7 +122,7 @@ If it isn't your stage, you'll see *Only [role] can move this order forward.* Yo
 
 | Role | Your stages | Extra notes |
 |---|---|---|
-| **Accounting** | Credit check, On hold, Collection, early payments | You can see amounts and receivables. |
+| **Accounting** | Accounting, On hold, Collection, early payments | You can see amounts and receivables. |
 | **Purchasing** | Purchasing, Waiting for supplier | Amounts are hidden (shown as ₱ ••••) unless the Super Admin grants access. |
 | **Inventory** | Receiving | You are the only role that can **add, edit, or archive inventory items**. Unit costs stay hidden; when you edit an item, its cost is kept as is. |
 | **Invoicing** | Invoicing | You can see amounts. |
@@ -164,9 +164,9 @@ Your other tools:
 ### Read an order page
 
 - **What happens next** (top): who it's waiting on, what's needed, and any delay, such as "2 days past the due date".
-- **Progress track**: Credit check → Purchasing → Receiving → Invoicing → Delivery → Payment. "From stock" under Receiving means it was skipped.
+- **Progress track**: Accounting → Purchasing → Receiving → Invoicing → Delivery → Collection. "From stock" under Receiving means it was skipped.
 - **Order activity**: every stage in order, with who did it, their role, and the date and time. The last entry shows the current stage and what's pending.
-- **Documents**: client P.O., supplier P.O., RR, SI, WR, DR, and OR, or "Not issued yet".
+- **Documents**: supplier P.O., vendor P.O., RR, SI, WR, DR, and OR, or "Not issued yet".
 - **Order details**: customer, items, amount, payment status, due date, and Bitrix24 deal number.
 
 ### Add or edit an inventory item (Inventory role, Department Head)
@@ -244,7 +244,7 @@ After registering:
 | View inventory | — | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Add, edit, archive inventory | — | ✓ | — | — | ✓ | — | — |
 | View orders and history | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Move orders through their stage | — | — | Credit check, payment | Purchasing | Receiving | Invoicing | Delivery |
+| Move orders through their stage | — | — | Accounting, collection | Purchasing | Receiving | Invoicing | Delivery |
 | See amounts, costs, receivables | ✓ | ✓ | ✓ | if granted | if granted | ✓ | if granted |
 | Sync, pipeline, connected systems, backups | — | ✓ | — | — | — | — | — |
 | Assign Operations roles | — | ✓ | — | — | — | — | — |
@@ -258,8 +258,8 @@ Restricted amounts show as **₱ ••••** and are left out of search. Form
 
 This walkthrough takes about 10 minutes and follows one order, **ORD-1041**, from the confirmed order to payment. Before you start, open the avatar menu and click **Reset demo data**.
 
-1. **Accounting (Jessa).** The Overview shows *Waiting on you*. Open **ORD-1041** and point out the document list and the timeline. Click **Clear credit check**.
-2. **Purchasing (Mark).** The bell shows "ORD-1041 is ready for purchasing." Amounts are masked for this role. Open the notification and **Issue supplier PO**.
+1. **Accounting (Jessa).** The Overview shows *Waiting on you*. Open **ORD-1041** and point out the document list and the timeline. Click **Clear the order**.
+2. **Purchasing (Mark).** The bell shows "ORD-1041 is ready for purchasing." Amounts are masked for this role. Open the notification and **Issue vendor P.O**.
 3. **Inventory (Ana).** Show that only this role can edit Inventory, and that unit costs are hidden. Open ORD-1041 and **Post receiving report**.
 4. **Invoicing (Paolo)** → **Issue SI and WR**.
 5. **Delivery (Lea)** → **Record delivery**. Because the order is unpaid, it moves to **Collection**.
@@ -287,7 +287,7 @@ Optional extras:
 
 | What you see | Why | What to do |
 |---|---|---|
-| *Only [role] can move this order forward.* | The order is at another role's step. | Sign in as that role, or check **Waiting on** in the order. |
+| *Only [role] can move this order forward.* | The order is at another role's stage. | Sign in as that role, or check **Waiting on** in the order. |
 | **₱ ••••** instead of an amount | Your role doesn't include financial access. | Ask the Super Admin to grant it. |
 | No **Add item** button in Inventory | Only the Inventory role (and the Department Head) can change inventory. | — |
 | *You don't have access to this page* | Your role can't open it. | Use the sidebar; it only lists pages you can open. |

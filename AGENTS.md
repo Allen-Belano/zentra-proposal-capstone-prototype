@@ -24,8 +24,8 @@ single place every user-facing name for a stage, a document, and a technical
 term is defined. Add new terms there rather than inline in a component, so the
 app cannot drift.
 
-The order lifecycle has **six stages** — Credit check → Purchasing → Receiving
-→ Invoicing → Delivery → Payment. "Waiting for supplier" and "On hold" are
+The order lifecycle has **six stages** — Accounting → Purchasing → Receiving
+→ Invoicing → Delivery → Collection. "Waiting for supplier" and "On hold" are
 sub-states, not stages. Use the word **stage**, never "step".
 
 ## Commands

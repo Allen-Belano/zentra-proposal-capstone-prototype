@@ -50,7 +50,7 @@ export function makeSeed() {
     },
     {
       id: "operations", name: "Operations", recordName: "Order", icon: "truck",
-      description: "Orders from won Bitrix24 deals, from credit check to payment.",
+      description: "Orders from won Bitrix24 deals, from Accounting to Collection.",
       kind: "external", source: "Bitrix24", owner: "Operations",
       adapter: {
         type: "api", endpoint: "https://ifixz.bitrix24.com/rest/crm.deal", frequency: "realtime",
@@ -64,10 +64,10 @@ export function makeSeed() {
       fields: [
         { key: "order_no", label: "Order no.", type: "text", primary: true },
         { key: "customer", label: "Customer", type: "text" },
-        { key: "client_po", label: "Client PO", type: "text", hideOnMobile: true, hideOnTablet: true },
+        { key: "client_po", label: "Supplier P.O", type: "text", hideOnMobile: true, hideOnTablet: true },
         { key: "items", label: "Items", type: "text", hideOnMobile: true, hideOnTablet: true },
         { key: "amount", label: "Amount", type: "currency", hideOnMobile: true, financial: true },
-        { key: "stage", label: "Step", type: "select", options: [...ORDER_STAGES] },
+        { key: "stage", label: "Stage", type: "select", options: [...ORDER_STAGES] },
         { key: "payment", label: "Payment", type: "select", options: [...PAYMENT_STATUSES] },
         { key: "due_date", label: "Due", type: "date", hideOnMobile: true },
       ],
@@ -89,18 +89,18 @@ export function makeSeed() {
     ["CON-5003", "Thermal paste 5g", "Consumables", 4, 6, 120, "Shelf E1"],
   ];
 
-  const wonAt = (minutesAgo: number): Step => ["Credit check", "Order confirmed in Bitrix24; order created in Zentra", "bitrix", minutesAgo];
-  // Three orders that together walk the flow from Accounting to Delivery: one just arrived for its credit check,
+  const wonAt = (minutesAgo: number): Step => ["Accounting", "Order confirmed in Bitrix24; order created in Zentra", "bitrix", minutesAgo];
+  // Three orders that together walk the flow from Accounting to Delivery: one just arrived for Accounting,
   // one waiting on a supplier delivery, and one that has been through every stage up to Delivery.
   const orderSpecs: { no: string; customer: string; clientPo: string; items: string; amount: number; stage: OrderStage; payment: "Paid" | "Unpaid"; due: number; steps: Step[] }[] = [
-    { no: "ORD-1041", customer: "Lumen Mobile Hub", clientPo: "CPO-55821", items: "40x Battery pack 3240mAh", amount: 31200, stage: "Credit check", payment: "Unpaid", due: 4,
+    { no: "ORD-1041", customer: "Lumen Mobile Hub", clientPo: "CPO-55821", items: "40x Battery pack 3240mAh", amount: 31200, stage: "Accounting", payment: "Unpaid", due: 4,
       steps: [wonAt(35)] },
     { no: "ORD-1040", customer: "QuickFix Antipolo", clientPo: "CPO-55790", items: "15x 6.1in LCD screen assembly", amount: 35250, stage: "Receiving", payment: "Unpaid", due: 3,
-      steps: [wonAt(26 * H), ["Credit check", "Credit check cleared: no unpaid balance", "accounting", 24 * H],
-        ["Purchasing", "Supplier PO SPO-3320 issued for the missing items", "purchasing", 20 * H, { supplierPo: "SPO-3320" }]] },
+      steps: [wonAt(26 * H), ["Accounting", "Cleared by Accounting: no unpaid balance", "accounting", 24 * H],
+        ["Purchasing", "Vendor P.O SPO-3320 issued for the missing items", "purchasing", 20 * H, { supplierPo: "SPO-3320" }]] },
     { no: "ORD-1038", customer: "Gadget Clinic Pasig", clientPo: "CPO-55702", items: "10x Rear camera module 12MP", amount: 16500, stage: "Delivery", payment: "Unpaid", due: 1,
-      steps: [wonAt(4 * D), ["Credit check", "Credit check cleared: no unpaid balance", "accounting", 3.8 * D],
-        ["Purchasing", "Supplier PO SPO-3317 issued for the missing items", "purchasing", 3.5 * D, { supplierPo: "SPO-3317" }],
+      steps: [wonAt(4 * D), ["Accounting", "Cleared by Accounting: no unpaid balance", "accounting", 3.8 * D],
+        ["Purchasing", "Vendor P.O SPO-3317 issued for the missing items", "purchasing", 3.5 * D, { supplierPo: "SPO-3317" }],
         ["Receiving", "Supplier delivery received; receiving report RR-2210 posted", "inventory", 1 * D, { rr: "RR-2210" }],
         ["Invoicing", "Sales invoice SI-4471 and written report WR-1182 issued", "invoicing", 6 * H, { si: "SI-4471", wr: "WR-1182" }]] },
   ];
@@ -142,7 +142,7 @@ export function makeSeed() {
 
   /** A deal won in Bitrix24 that hasn't been pulled into Zentra yet. It's incomplete on purpose, so "Update now" shows a record that needs fixing without adding a fourth order. */
   const remoteInbox: Record<string, string>[] = [
-    { order_no: "ORD-1043", customer: "", client_po: "CPO-55843", items: "5x 10.2in tablet digitizer", amount: "15500", stage: "Credit check", payment: "Unpaid", due_date: daysFromNow(7) },
+    { order_no: "ORD-1043", customer: "", client_po: "CPO-55843", items: "5x 10.2in tablet digitizer", amount: "15500", stage: "Accounting", payment: "Unpaid", due_date: daysFromNow(7) },
   ];
 
   const rules: ValidationRule[] = [
@@ -180,7 +180,7 @@ export function makeSeed() {
   const rejected: RejectedRow[] = [
     { id: "rej-1", runId: "run-7", moduleId: "ims", rowIndex: 7, errors: ["Item code \"bat2003\" doesn't look like the expected format"], raw: { sku: "bat2003", name: "Battery pack 5000mAh", category: "Batteries", on_hand: "30", reorder_level: "10", unit_cost: "1050", location: "Rack B2" }, status: "open", createdAt: ago(60 * 3) },
     { id: "rej-2", runId: "run-7", moduleId: "ims", rowIndex: 15, errors: ["On hand can't be below 0"], raw: { sku: "CMP-3011", name: "Vibration motor", category: "Components", on_hand: "-4", reorder_level: "10", unit_cost: "95", location: "Bin C6" }, status: "open", createdAt: ago(60 * 3) },
-    { id: "rej-3", runId: "run-4", moduleId: "operations", rowIndex: 3, errors: ["Customer is required"], raw: { order_no: "ORD-1029", customer: "", client_po: "CPO-55470", items: "4x 20W USB-C charger", amount: "1560", stage: "Credit check", payment: "Unpaid", due_date: daysFromNow(-6) }, status: "dismissed", createdAt: ago(60 * 24 * 3) },
+    { id: "rej-3", runId: "run-4", moduleId: "operations", rowIndex: 3, errors: ["Customer is required"], raw: { order_no: "ORD-1029", customer: "", client_po: "CPO-55470", items: "4x 20W USB-C charger", amount: "1560", stage: "Accounting", payment: "Unpaid", due_date: daysFromNow(-6) }, status: "dismissed", createdAt: ago(60 * 24 * 3) },
   ];
 
   const syncOps: SyncOperation[] = [
@@ -194,22 +194,22 @@ export function makeSeed() {
     { id: "e4", moduleId: "ims", title: "Pipeline run #107 finished", detail: "20 loaded, 2 rejected from receiving_oct20.csv", actor: "Carlo Reyes", level: "warning", at: ago(178) },
     { id: "e6", moduleId: "ims", recordId: "ims-12", title: "Thermal paste 5g is below reorder level", detail: "4 on hand, reorder at 6", actor: "System", level: "warning", at: ago(300) },
     { id: "e8", moduleId: "operations", title: "Bitrix24 sync completed", detail: "1 order pulled", actor: "Scheduled sync", level: "success", at: ago(60 * 24) },
-    { id: "e9", moduleId: "operations", recordId: "ops-1", title: "ORD-1041 received from Bitrix24", detail: "Order confirmed; the order is waiting for its credit check", actor: "Bitrix24", level: "info", at: ago(35) },
+    { id: "e9", moduleId: "operations", recordId: "ops-1", title: "ORD-1041 received from Bitrix24", detail: "Order confirmed; the order is waiting on Accounting", actor: "Bitrix24", level: "info", at: ago(35) },
   ];
 
   const note = (id: string, to: AppNotification["to"], title: string, detail: string, recordId: string | undefined, min: number): AppNotification =>
     ({ id, to, title, detail, recordId, moduleId: "operations", at: ago(min), readBy: [] });
   const notifications: AppNotification[] = [
-    note("n1", { position: "accounting" }, "ORD-1041 needs a credit check", "New order from Lumen Mobile Hub", "ops-1", 35),
-    note("n2", { position: "purchasing" }, "ORD-1040 is ready for purchasing", "Credit check cleared by Jessa Cruz", "ops-2", 24 * H),
-    note("n3", { position: "inventory" }, "ORD-1040 is waiting for a supplier delivery", "Supplier PO SPO-3320 issued by Mark Dizon", "ops-2", 20 * H),
+    note("n1", { position: "accounting" }, "ORD-1041 is ready for Accounting", "New order from Lumen Mobile Hub", "ops-1", 35),
+    note("n2", { position: "purchasing" }, "ORD-1040 is ready for purchasing", "Cleared by Accounting (Jessa Cruz)", "ops-2", 24 * H),
+    note("n3", { position: "inventory" }, "ORD-1040 is waiting for a supplier delivery", "Vendor P.O SPO-3320 issued by Mark Dizon", "ops-2", 20 * H),
     note("n4", { position: "delivery" }, "ORD-1038 is ready for delivery", "SI-4471 and WR-1182 issued by Paolo Garcia", "ops-3", 6 * H),
     note("n5", { role: "dept_head" }, "Sync conflict on ORD-1038", "Changed in both Zentra and Bitrix24", "ops-3", 42),
   ];
 
   const audit: AuditEntry[] = [
     { id: "a1", actor: "Jessa Cruz", role: "employee", action: "Signed in", target: "Session", at: ago(5) },
-    { id: "a7", actor: "Mark Dizon", role: "employee", action: "Updated order", target: "Operations · ORD-1040: supplier PO issued", at: ago(20 * H) },
+    { id: "a7", actor: "Mark Dizon", role: "employee", action: "Updated order", target: "Operations · ORD-1040: vendor P.O issued", at: ago(20 * H) },
     { id: "a2", actor: "Carlo Reyes", role: "dept_head", action: "Imported a file", target: "Inventory · receiving_oct20.csv", at: ago(180) },
     { id: "a3", actor: "Paolo Garcia", role: "employee", action: "Updated order", target: "Operations · ORD-1038: SI and WR issued", at: ago(6 * H) },
     { id: "a5", actor: "Carlo Reyes", role: "dept_head", action: "Assigned Operations role", target: "Lea Mendoza: Delivery", at: ago(60 * 24 * 3) },
@@ -247,8 +247,8 @@ CON-5011,Precision screwdriver set,Consumables,12,4,450,Shelf E2
 DSP-1001,6.1in LCD screen assembly,Displays,10,15,2350,Rack A1
 CMP-3022,Power button flex,Components,40,15,120,Bin C7`,
   operations: `order_no,customer,client_po,items,amount,stage,payment,due_date
-ORD-1050,FixPoint Angono,CPO-55901,10x Battery pack 3240mAh,7800,Credit check,Unpaid,2026-10-28
-ORD-1051,Gadget Clinic Pasig,CPO-55902,5x 20W USB-C charger,1950,Credit check,Unpaid,2026-10-29
-ORD-1052,,CPO-55903,8x Loudspeaker unit,2080,Credit check,Unpaid,2026-10-29
+ORD-1050,FixPoint Angono,CPO-55901,10x Battery pack 3240mAh,7800,Accounting,Unpaid,2026-10-28
+ORD-1051,Gadget Clinic Pasig,CPO-55902,5x 20W USB-C charger,1950,Accounting,Unpaid,2026-10-29
+ORD-1052,,CPO-55903,8x Loudspeaker unit,2080,Accounting,Unpaid,2026-10-29
 ORD-1053,Repair Bay Taytay,CPO-55904,12x Tempered glass 6.1in,540,Shipped,Unpaid,2026-10-30`,
 };

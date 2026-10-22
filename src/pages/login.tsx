@@ -11,8 +11,8 @@ import { POSITION_LABEL, POSITIONS } from "@/lib/rbac";
 import type { Position } from "@/lib/types";
 
 const POSITION_SCOPE: Record<Position, string> = {
-  accounting: "Credit checks and payments",
-  purchasing: "Supplier purchase orders",
+  accounting: "Order clearing and payments",
+  purchasing: "Vendor purchase orders",
   inventory: "Stock and receiving reports",
   invoicing: "Sales invoices and sales reports",
   delivery: "Deliveries and delivery receipts",

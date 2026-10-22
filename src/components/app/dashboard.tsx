@@ -177,7 +177,7 @@ function useDashboardData() {
         { name: "Paid", Orders: orders.filter((o) => o.data.payment === "Paid").length },
         { name: "Unpaid", Orders: orders.filter((o) => o.data.payment !== "Paid").length },
       ],
-      byRole: dept.byPosition.map((p) => ({ name: POSITION_LABEL[p.position], Steps: p.steps })),
+      byRole: dept.byPosition.map((p) => ({ name: POSITION_LABEL[p.position], Stages: p.steps })),
     };
   }, [records]);
 }
@@ -207,7 +207,7 @@ function ChartPanel({ id, kind, className }: { id: string; kind: ChartKind; clas
     id === "orders-by-step" ? <FlexChart kind={kind} data={d.byStep} series={[{ key: "Orders", label: "Orders" }]} />
     : id === "orders-trend" ? <FlexChart kind={kind} data={d.trend} series={[{ key: "Received", label: "Received" }, { key: "Completed", label: "Completed" }]} />
     : id === "payment-status" ? <FlexChart kind={kind} data={d.payment} series={[{ key: "Orders", label: "Orders" }]} />
-    : <FlexChart kind={kind} data={d.byRole} series={[{ key: "Steps", label: "Steps" }]} />;
+    : <FlexChart kind={kind} data={d.byRole} series={[{ key: "Stages", label: "Stages" }]} />;
   return (
     <Card className={className}>
       <CardHeader><CardTitle>{def.label}</CardTitle><CardDescription>{def.hint}</CardDescription></CardHeader>
@@ -233,7 +233,7 @@ function TeamKpisPanel({ className }: { className?: string }) {
               <span className="block text-xs text-muted-foreground">{POSITION_LABEL[k.position]}</span>
             </span>
             <span className="flex shrink-0 gap-4 text-right text-xs">
-              <span><span className="block font-medium tabular">{k.steps}</span><span className="text-muted-foreground">steps</span></span>
+              <span><span className="block font-medium tabular">{k.steps}</span><span className="text-muted-foreground">stages</span></span>
               <span><span className="block font-medium tabular">{formatHours(k.avgHours)}</span><span className="text-muted-foreground">average</span></span>
               <span><span className={cn("block font-medium tabular", k.onTargetPct !== null && k.onTargetPct < 80 && "text-warning")}>{k.onTargetPct === null ? "—" : `${k.onTargetPct}%`}</span><span className="text-muted-foreground">on target</span></span>
             </span>
