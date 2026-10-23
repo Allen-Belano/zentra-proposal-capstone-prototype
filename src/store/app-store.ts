@@ -1,13 +1,15 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { makeSeed } from "@/data/seed";
-import { actionOwner, actionsFor, ORDER_ACTIONS, type OrderStage } from "@/lib/orders";
-import { can, canActAs, canViewFinancials, moduleAccess, POSITION_LABEL } from "@/lib/rbac";
+import { actionOwner, actionsFor, ORDER_ACTIONS, parseItems, STAGE_INFO, type OrderStage } from "@/lib/orders";
+import { isOpenOverdue, overdueReasonOf, paymentDueOf, slaOf } from "@/lib/sla";
+import { can, canActAs, canExport, canViewFinancials, moduleAccess, POSITION_LABEL } from "@/lib/rbac";
 import { recordLabel, transformRow, validateRow } from "@/lib/validation";
+import { stageLabel } from "@/lib/terms";
 import type {
   ActivityEvent, AppNotification, DashboardPrefs, AuditEntry, Backup, BatchItemKind, BatchOutcome, BatchRun, EventLevel, ModuleAccess,
   ModuleDef, OrderDocs, OrderLogEntry, PipelineRun, Position, RecordItem, RejectedRow, RemoteRecord, Role, SyncFrequency,
-  SyncOperation, User, ValidationRule,
+  SyncOperation, SyncState, User, ValidationRule,
 } from "@/lib/types";
 import { uid } from "@/lib/utils";
 
@@ -15,13 +17,14 @@ type Seed = ReturnType<typeof makeSeed>;
 type Row = Record<string, string | number>;
 export type BackupSchedule = "every_4_hours" | "daily" | "weekly";
 
-interface Result { ok: boolean; errors?: string[] }
+interface Result { ok: boolean; errors?: string[]; id?: string }
 export type ConflictPolicy = "skip" | "zentra" | "external";
 
 /** Who gets told when an order arrives at a stage, and what they read. */
 const ARRIVAL: Partial<Record<OrderStage, { to: AppNotification["to"]; title: (no: string) => string }>> = {
   "On hold": { to: { role: "dept_head" }, title: (no) => `${no} is on hold` },
   Purchasing: { to: { position: "purchasing" }, title: (no) => `${no} is ready for purchasing` },
+  "Order basis": { to: { position: "purchasing" }, title: (no) => `${no} is waiting for a supplier` },
   Receiving: { to: { position: "inventory" }, title: (no) => `${no} is waiting for a supplier delivery` },
   Invoicing: { to: { position: "invoicing" }, title: (no) => `${no} is ready for invoicing` },
   Delivery: { to: { position: "delivery" }, title: (no) => `${no} is ready for delivery` },
@@ -44,6 +47,10 @@ interface AppState extends Omit<Seed, "backupSchedule"> {
   addRecord: (moduleId: string, data: Row) => Result;
   updateRecord: (recordId: string, data: Row) => Result;
   setArchived: (recordId: string, archived: boolean) => Result;
+  logExport: (moduleId: string, count: number) => void;
+  reportDelay: (recordId: string, note: string) => Result;
+  /** Alerts on orders that just passed their delivery limit. Runs on load and every minute. */
+  checkOverdue: () => void;
   advanceOrder: (recordId: string, actionId: string, docs: Partial<Record<keyof OrderDocs, string>>) => Result;
 
   runPipeline: (moduleId: string, source: string, rows: Row[]) => PipelineRun;
@@ -100,8 +107,8 @@ export const useApp = create<AppState>()(
         set((s) => ({ activity: [full, ...s.activity].slice(0, 300) }));
       };
 
-      const notify = (to: AppNotification["to"], title: string, detail?: string, orderId?: string) => {
-        const n: AppNotification = { id: uid("n-"), to, title, detail, orderId, at: now(), readBy: [] };
+      const notify = (to: AppNotification["to"], title: string, detail?: string, recordId?: string, moduleId?: string) => {
+        const n: AppNotification = { id: uid("n-"), to, title, detail, recordId, moduleId, at: now(), readBy: [] };
         set((s) => ({ notifications: [n, ...s.notifications].slice(0, 200) }));
       };
 
@@ -123,6 +130,16 @@ export const useApp = create<AppState>()(
       const mod = (id: string) => get().modules.find((m) => m.id === id)!;
       const patchRecord = (id: string, patch: Partial<RecordItem>) =>
         set((s) => ({ records: s.records.map((r) => (r.id === id ? { ...r, ...patch } : r)) }));
+      /** Adds received order items to the matching Inventory items, matched by item name. */
+      const receiveStock = (items: string, orderNo: string) => {
+        for (const { qty, name } of parseItems(items)) {
+          const item = get().records.find((r) => r.moduleId === "ims" && !r.archived && String(r.data.name).toLowerCase() === name.toLowerCase());
+          if (!item) continue;
+          const before = Number(item.data.on_hand) || 0;
+          patchRecord(item.id, { data: { ...item.data, on_hand: before + qty }, updatedAt: now(), updatedBy: actorName() });
+          event({ moduleId: "ims", recordId: item.id, title: `${name}: ${qty} received`, detail: `Stock ${before} → ${before + qty}, from ${orderNo}`, level: "success" });
+        }
+      };
       const patchOp = (id: string, patch: Partial<SyncOperation>) =>
         set((s) => ({ syncOps: s.syncOps.map((o) => (o.id === id ? { ...o, ...patch } : o)) }));
 
@@ -146,16 +163,16 @@ export const useApp = create<AppState>()(
             }
             patchOp(opId, { status: "failed", attempts: 3, error: `${source} didn't respond after 3 attempts (timeout).` });
             patchRecord(recordId, { syncState: "failed" });
-            event({ moduleId: rec.moduleId, recordId, title: `Write-back failed for ${label}`, detail: `${source} didn't respond after 3 attempts.`, level: "error", actor: "System" });
-            notify({ role: "dept_head" }, `Write-back failed for ${label}`, `${source} didn't respond after 3 attempts`, recordId);
+            event({ moduleId: rec.moduleId, recordId, title: `Couldn't send ${label} to ${source}`, detail: `${source} didn't respond after 3 attempts.`, level: "error", actor: "System" });
+            notify({ role: "dept_head" }, `Couldn't send ${label} to ${source}`, `${source} didn't respond after 3 attempts`, recordId, rec.moduleId);
             return;
           }
           const remote = s.remote[recordId];
           if (remote && rec.syncedVersion !== undefined && remote.version !== rec.syncedVersion) {
-            patchOp(opId, { status: "conflict", attempts: attempt, error: `The record changed in ${source} after Zentra's last sync.`, local: { ...rec.data }, remote: { ...remote.data } });
+            patchOp(opId, { status: "conflict", attempts: attempt, error: `The record changed in ${source} after Zentra's last update.`, local: { ...rec.data }, remote: { ...remote.data } });
             patchRecord(recordId, { syncState: "conflict" });
-            event({ moduleId: rec.moduleId, recordId, title: `Sync conflict on ${label}`, detail: `Changed in both Zentra and ${source}. Waiting for review.`, level: "warning", actor: "System" });
-            notify({ role: "dept_head" }, `Sync conflict on ${label}`, `Changed in both Zentra and ${source}`, recordId);
+            event({ moduleId: rec.moduleId, recordId, title: `${label} changed in both systems`, detail: `Changed in both Zentra and ${source}. Waiting for review.`, level: "warning", actor: "System" });
+            notify({ role: "dept_head" }, `${label} changed in both systems`, `Changed in both Zentra and ${source}`, recordId, rec.moduleId);
             return;
           }
           const version = (remote?.version ?? 0) + 1;
@@ -189,14 +206,14 @@ export const useApp = create<AppState>()(
         };
         if (moduleId === "operations") {
           const fromBitrix = source?.startsWith("Bitrix24");
-          const description = fromBitrix ? "Deal won in Bitrix24; order created in Zentra"
+          const description = fromBitrix ? "Order confirmed in Bitrix24; order created in Zentra"
             : source ? `Order imported from ${source}` : "Order created in Zentra";
           rec.order = {
             docs: { clientPo: String(clean.client_po || "") || undefined },
             log: [logEntry(String(clean.stage), description, fromBitrix ? "Bitrix24" : me())],
           };
           const no = String(clean.order_no);
-          notify({ position: "accounting" }, `${no} needs a credit check`, `New order from ${clean.customer || "a client"}`, rec.id);
+          notify({ position: "accounting" }, `${no} is ready for Accounting`, `New order from ${clean.customer || "a client"}`, rec.id, "operations");
         }
         set((s) => ({ records: [rec, ...s.records] }));
         return rec;
@@ -251,7 +268,7 @@ export const useApp = create<AppState>()(
           event({ moduleId, recordId: rec.id, title: `${m.recordName} ${label} added`, level: "info" });
           audit("Added record", `${m.name}: ${label}`);
           if (m.kind === "external") queueOutbound(rec);
-          return { ok: true };
+          return { ok: true, id: rec.id };
         },
 
         updateRecord: (recordId, data) => {
@@ -268,7 +285,7 @@ export const useApp = create<AppState>()(
           const stageChanged = rec.data.stage !== undefined && rec.data.stage !== next.stage;
           const paymentChanged = rec.data.payment !== undefined && rec.data.payment !== next.payment;
           const notes = [
-            stageChanged && `step changed from ${rec.data.stage} to ${next.stage}`,
+            stageChanged && `stage changed from ${stageLabel(String(rec.data.stage))} to ${stageLabel(String(next.stage))}`,
             paymentChanged && `payment marked ${next.payment}`,
           ].filter(Boolean);
           const order = rec.order && notes.length
@@ -296,12 +313,56 @@ export const useApp = create<AppState>()(
           return { ok: true };
         },
 
+        logExport: (moduleId, count) => {
+          if (!canExport(me())) return;
+          audit("Exported a CSV file", `${mod(moduleId).name}: ${count} record${count === 1 ? "" : "s"}`);
+        },
+
+        reportDelay: (recordId, note) => {
+          const u = me();
+          const rec = get().records.find((r) => r.id === recordId);
+          if (!u || !rec?.order) return { ok: false, errors: ["This order no longer exists."] };
+          const owner = STAGE_INFO[rec.data.stage as OrderStage]?.owner;
+          if (!canActAs(u, owner)) return { ok: false, errors: [`Only ${owner ? POSITION_LABEL[owner] : "the assigned role"} can report a delay on this order.`] };
+          const sla = slaOf(rec);
+          const payLate = rec.data.stage === "Collection" && paymentDueOf(rec)?.state !== "on_track" && !!paymentDueOf(rec);
+          if (rec.data.stage === "Collection" ? !payLate : (rec.data.stage === "Done" || !sla || (!sla.late && !sla.hardToSource)))
+            return { ok: false, errors: [rec.data.stage === "Collection" ? "This payment isn't overdue." : "This order is within its delivery limit."] };
+          const text = note.trim();
+          if (!text) return { ok: false, errors: ["Write a short note about the delay"] };
+          const m = mod(rec.moduleId);
+          const no = recordLabel(m, rec.data);
+          const entry: OrderLogEntry = { ...logEntry(String(rec.data.stage), "Delay reported: outside our control", u), note: text, delay: true };
+          patchRecord(recordId, { updatedAt: now(), updatedBy: u.name, order: { ...rec.order, log: [...rec.order.log, entry] } });
+          notify({ role: "dept_head" }, `${no}: delay reported`, `${text} (${u.name})`, recordId, "operations");
+          event({ moduleId: "operations", recordId, title: `Delay reported on ${no}`, detail: text, level: "info" });
+          audit("Reported a delay", `${m.name} · ${no}`);
+          return { ok: true };
+        },
+
+        checkOverdue: () => {
+          const seen = new Set(get().overdueNotified);
+          const fresh = get().records.filter((r) => r.moduleId === "operations" && !r.archived && !seen.has(r.id) && isOpenOverdue(r));
+          if (!fresh.length) return;
+          for (const r of fresh) {
+            const sla = slaOf(r)!;
+            const no = String(r.data.order_no);
+            const reason = overdueReasonOf(r);
+            const owner = STAGE_INFO[r.data.stage as OrderStage]?.owner;
+            const detail = `${sla.lateDays} day${sla.lateDays === 1 ? "" : "s"} past the ${sla.days}-day limit. ${reason ?? "No reason recorded yet."}`;
+            if (owner) notify({ position: owner }, `${no} is past its delivery limit`, detail, r.id, "operations");
+            notify({ role: "dept_head" }, `${no} is past its delivery limit`, detail, r.id, "operations");
+            event({ moduleId: "operations", recordId: r.id, title: `${no} is past its delivery limit`, detail, level: reason ? "warning" : "error", actor: "System" });
+          }
+          set((s) => ({ overdueNotified: [...s.overdueNotified, ...fresh.map((r) => r.id)] }));
+        },
+
         advanceOrder: (recordId, actionId, docs) => {
           const u = me();
           const rec = get().records.find((r) => r.id === recordId);
           const action = ORDER_ACTIONS.find((a) => a.id === actionId);
-          if (!u || !rec?.order || !action) return { ok: false, errors: ["This order or step no longer exists."] };
-          if (!actionsFor(rec).includes(action)) return { ok: false, errors: [`"${action.label}" isn't available at the ${rec.data.stage} step.`] };
+          if (!u || !rec?.order || !action) return { ok: false, errors: ["This order or stage no longer exists."] };
+          if (!actionsFor(rec).includes(action)) return { ok: false, errors: [`"${action.label}" isn't available at the ${stageLabel(String(rec.data.stage))} stage.`] };
           const owner = actionOwner(rec, action);
           if (!canActAs(u, owner)) return { ok: false, errors: [`Only ${owner ? POSITION_LABEL[owner] : "the assigned role"} can do this.`] };
           const missing = (action.docs ?? []).filter((d) => !String(docs[d.key] ?? "").trim());
@@ -320,8 +381,9 @@ export const useApp = create<AppState>()(
           };
           patchRecord(recordId, updated);
           const no = recordLabel(m, data);
+          if (action.addsStock) receiveStock(String(rec.data.items ?? ""), no);
           const arrival = stage !== rec.data.stage ? ARRIVAL[stage as OrderStage] : undefined;
-          if (arrival) notify(arrival.to, arrival.title(no), `${description} (${u.name})`, recordId);
+          if (arrival) notify(arrival.to, arrival.title(no), `${description} (${u.name})`, recordId, "operations");
           audit("Updated order", `${m.name} · ${no}: ${action.label.toLowerCase()}`);
           queueOutbound(updated);
           return { ok: true };
@@ -352,11 +414,11 @@ export const useApp = create<AppState>()(
           };
           set((s) => ({ pipelineRuns: [...s.pipelineRuns, run], rejected: [...rejectedRows, ...s.rejected] }));
           event({
-            moduleId, title: `Pipeline run #${run.number} finished`,
-            detail: `${run.loaded} loaded, ${run.rejected} rejected from ${source}`,
+            moduleId, title: `File import #${run.number} finished`,
+            detail: `${run.loaded} validated, ${run.rejected} need fixing, from ${source}`,
             level: run.rejected ? "warning" : "success",
           });
-          audit("Ran ETL pipeline", `${m.name}: ${source}`);
+          audit("Imported a file", `${m.name}: ${source}`);
           return run;
         },
 
@@ -368,10 +430,10 @@ export const useApp = create<AppState>()(
             set((s) => ({ rejected: s.rejected.map((r) => (r.id === rowId ? { ...r, errors } : r)) }));
             return { ok: false, errors };
           }
-          const rec = load(row.moduleId, data, "the rejected-records ledger");
+          const rec = load(row.moduleId, data, "the list of records to fix");
           if (m.kind === "external") queueOutbound(rec);
           set((s) => ({ rejected: s.rejected.map((r) => (r.id === rowId ? { ...r, status: "reloaded", raw: Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)])) } : r)) }));
-          audit("Fixed and reloaded rejected row", `${m.name}: ${recordLabel(m, rec.data)}`);
+          audit("Fixed and validated a record that needed fixing", `${m.name}: ${recordLabel(m, rec.data)}`);
           event({ moduleId: m.id, recordId: rec.id, title: `Rejected row fixed: ${recordLabel(m, rec.data)}`, detail: "Passed validation and loaded", level: "success" });
           return { ok: true };
         },
@@ -379,7 +441,7 @@ export const useApp = create<AppState>()(
         dismissRejected: (rowId) => {
           const row = get().rejected.find((r) => r.id === rowId)!;
           set((s) => ({ rejected: s.rejected.map((r) => (r.id === rowId ? { ...r, status: "dismissed" } : r)) }));
-          audit("Dismissed rejected row", `${mod(row.moduleId).name}: row ${row.rowIndex}`);
+          audit("Dismissed a record that needed fixing", `${mod(row.moduleId).name}: row ${row.rowIndex}`);
         },
 
         syncNow: (moduleId) => {
@@ -438,9 +500,9 @@ export const useApp = create<AppState>()(
           } else {
             patchRecord(rec.id, { data: { ...remote.data }, syncState: "synced", syncedVersion: remote.version, updatedAt: now(), updatedBy: `${m.source} sync` });
           }
-          const resolution = keep === "zentra" ? "Kept Zentra version and pushed it" : `Kept ${m.source} version`;
+          const resolution = keep === "zentra" ? "Kept the Zentra version and sent it" : `Kept the ${m.source} version`;
           patchOp(opId, { status: "success", resolution, resolvedAt: now(), resolvedBy: actorName() });
-          event({ moduleId: m.id, recordId: rec.id, title: `Conflict on ${op.recordLabel} resolved`, detail: resolution, level: "success" });
+          event({ moduleId: m.id, recordId: rec.id, title: `${op.recordLabel} reviewed and kept`, detail: resolution, level: "success" });
           audit("Resolved sync conflict", `${op.recordLabel}: ${resolution}`);
         },
 
@@ -448,7 +510,7 @@ export const useApp = create<AppState>()(
           const op = get().syncOps.find((o) => o.id === opId)!;
           const rec = get().records.find((r) => r.id === op.recordId)!;
           patchOp(opId, { status: "success", resolution: "Retried", resolvedAt: now(), resolvedBy: actorName() });
-          audit("Retried write-back", op.recordLabel);
+          audit("Sent to the source again", op.recordLabel);
           queueOutbound(rec);
         },
 
@@ -529,7 +591,7 @@ export const useApp = create<AppState>()(
         },
 
         registerModule: (m, rules = []) => {
-          if (!can(me(), "modules.manage")) return { ok: false, errors: ["Only Department Heads can register modules."] };
+          if (!can(me(), "modules.manage")) return { ok: false, errors: ["Only the Super Admin or the Operations Department Head can connect systems."] };
           if (get().modules.some((x) => x.id === m.id)) return { ok: false, errors: [`A module with the key "${m.id}" already exists.`] };
           const full: ModuleDef = { ...m, registeredAt: now(), registeredBy: actorName(), lastSyncedAt: m.kind === "external" ? now() : undefined };
           set((s) => ({
@@ -583,10 +645,10 @@ export const useApp = create<AppState>()(
           const u = me();
           const target = get().users.find((x) => x.id === userId);
           if (!can(u, "access.manage") || !target || target.role !== "employee" || target.department !== u?.department) {
-            return { ok: false, errors: ["Only the Department Head can grant team KPI access in their department."] };
+            return { ok: false, errors: ["Only the Operations Department Head can let the team see key numbers."] };
           }
           set((s) => ({ users: s.users.map((x) => (x.id === userId ? { ...x, teamKpiAccess: on } : x)) }));
-          audit(on ? "Granted team KPI access" : "Revoked team KPI access", target.name);
+          audit(on ? "Shared the team's key numbers" : "Stopped sharing the team's key numbers", target.name);
           return { ok: true };
         },
 
@@ -609,11 +671,11 @@ export const useApp = create<AppState>()(
         createBackup: () => {
           const b: Backup = { id: uid("b-"), createdAt: now(), sizeMb: 180 + Math.round(Math.random() * 12), type: "manual", status: "available" };
           set((s) => ({ backups: [b, ...s.backups] }));
-          audit("Created backup", "Manual restore point");
+          audit("Created backup", "Manual backup copy");
         },
         testRestore: (backupId) => {
           set((s) => ({ backups: s.backups.map((b) => (b.id === backupId ? { ...b, status: "verified" } : b)) }));
-          audit("Tested restore", "Restore point verified");
+          audit("Tested restore", "Backup copy checked");
         },
         setBackupSchedule: (backupSchedule) => {
           set({ backupSchedule });
@@ -622,8 +684,8 @@ export const useApp = create<AppState>()(
       };
     },
     {
-      // v3: module owners, adapter connections, and field mappings. Older saved demos start fresh.
-      name: "zentra-demo-v3",
+      // v11: payment terms. Older saved demos start fresh.
+      name: "zentra-demo-v13",
       storage: createJSONStorage(() => {
         try {
           localStorage.setItem("__t", "1");
@@ -645,6 +707,26 @@ export const useApp = create<AppState>()(
 );
 
 export const useMe = () => useApp((s) => s.users.find((u) => u.id === s.sessionUserId) ?? null);
+
+/**
+ * Waits until a record has finished being sent to the source system, and reports
+ * how it went. Records that never go out (a module typed inside Zentra) settle
+ * immediately.
+ */
+export function waitForSync(recordId: string, timeoutMs = 8000): Promise<SyncState> {
+  const current = useApp.getState().records.find((r) => r.id === recordId)?.syncState;
+  if (current !== "pending") return Promise.resolve(current ?? "synced");
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const tick = () => {
+      const state = useApp.getState().records.find((r) => r.id === recordId)?.syncState;
+      if (state && state !== "pending") return resolve(state);
+      if (Date.now() - started > timeoutMs) return resolve("synced");
+      setTimeout(tick, 150);
+    };
+    tick();
+  });
+}
 
 /** Whether a notification is addressed to this user's position or role. */
 export function isFor(n: AppNotification, u: User) {

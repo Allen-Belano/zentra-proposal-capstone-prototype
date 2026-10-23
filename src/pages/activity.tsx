@@ -5,8 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { EmptyState, PageHeader, PaymentBadge, StageBadge, SyncBadge } from "@/components/app/bits";
+import { EmptyState, OverdueBadge, PageHeader, PaymentBadge, StageBadge, SyncBadge } from "@/components/app/bits";
 import { delayReason, STAGE_INFO, type OrderStage } from "@/lib/orders";
+import { slaOf } from "@/lib/sla";
 import { moduleAccess, POSITION_LABEL, POSITIONS } from "@/lib/rbac";
 import type { OrderLogEntry, Position, RecordItem } from "@/lib/types";
 import { formatDate, formatDateTime, timeAgo } from "@/lib/utils";
@@ -20,6 +21,7 @@ function OrderCard({ o }: { o: RecordItem }) {
   const info = STAGE_INFO[stage];
   const delay = delayReason(o);
   const last = o.order?.log.at(-1);
+  const sla = slaOf(o);
   return (
     <Link
       to="/orders/$orderId" params={{ orderId: o.id }}
@@ -34,7 +36,8 @@ function OrderCard({ o }: { o: RecordItem }) {
           <div className="mt-0.5 text-sm text-muted-foreground">{o.data.items}</div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {delay && <Badge variant="warning">{delay}</Badge>}
+          {stage === "On hold" && delay && <Badge variant="warning">{delay}</Badge>}
+          <OverdueBadge rec={o} />
           <StageBadge stage={stage} />
           <PaymentBadge status={String(o.data.payment)} />
           <SyncBadge state={o.syncState} />
@@ -52,7 +55,7 @@ function OrderCard({ o }: { o: RecordItem }) {
             <span className="text-muted-foreground">{info.pending}</span>
           </span>
         )}
-        <span className="text-muted-foreground">Due {formatDate(String(o.data.due_date))}{last && <> · updated {timeAgo(last.at)}</>}</span>
+        <span className="text-muted-foreground">{sla && !sla.deliveredAt && <>Deliver by {formatDate(sla.deadline)} · </>}{last && <>updated {timeAgo(last.at)}</>}</span>
       </div>
     </Link>
   );
@@ -71,7 +74,7 @@ export function ActivityPage() {
       .filter((r) => (show === "open" ? r.data.stage !== "Done" : show === "done" ? r.data.stage === "Done" : true))
       .filter((r) => owner === "all" || STAGE_INFO[r.data.stage as OrderStage]?.owner === owner)
       // Orders that need attention first, then by due date.
-      .sort((a, b) => Number(!!delayReason(b)) - Number(!!delayReason(a)) || String(a.data.due_date).localeCompare(String(b.data.due_date))),
+      .sort((a, b) => Number(!!delayReason(b)) - Number(!!delayReason(a)) || (slaOf(a)?.deadline ?? "9").localeCompare(slaOf(b)?.deadline ?? "9")),
     [allOrders, show, owner],
   );
 
@@ -91,11 +94,11 @@ export function ActivityPage() {
 
   return (
     <>
-      <PageHeader title="Order tracking" description="Follow each order from the won deal to payment. Open an order to see its documents and full history." />
+      <PageHeader title="Order tracking" description="Follow each order from the confirmed order to payment. Open an order to see its documents and full history." />
       <Tabs defaultValue="orders">
         <TabsList>
-          <TabsTrigger value="orders">Orders</TabsTrigger>
-          <TabsTrigger value="feed">Order activity</TabsTrigger>
+          <TabsTrigger value="orders">Open orders</TabsTrigger>
+          <TabsTrigger value="feed">History</TabsTrigger>
         </TabsList>
 
         <TabsContent value="orders">
@@ -117,7 +120,7 @@ export function ActivityPage() {
             </Select>
           </div>
           {orders.length === 0 ? (
-            <Card><EmptyState title={show === "done" ? "No completed orders" : "No orders here"} description="Try a different filter." /></Card>
+            <Card><EmptyState title={show === "done" ? "No completed orders" : "No orders match this filter"} description="Try a different filter, or clear the search." /></Card>
           ) : (
             <div className="stagger grid gap-3">{orders.map((o) => <OrderCard key={o.id} o={o} />)}</div>
           )}
@@ -125,7 +128,7 @@ export function ActivityPage() {
 
         <TabsContent value="feed">
           <Card className="p-5">
-            {feed.length === 0 ? <EmptyState title="No order activity yet" /> : feed.map(([day, items]) => (
+            {feed.length === 0 ? <EmptyState title="No order history yet" description="Activity appears here once orders start moving." /> : feed.map(([day, items]) => (
               <section key={day} className="mb-6 last:mb-0">
                 <h2 className="mb-3 text-sm font-medium text-muted-foreground">{day}</h2>
                 <ol className="grid gap-2">

@@ -7,12 +7,14 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LevelDot, Money, PageHeader, StageBadge, StatCard } from "@/components/app/bits";
+import { LevelDot, Money, OverdueBadge, PageHeader, PaymentDueBadge, StageBadge, StatCard } from "@/components/app/bits";
+import { DatePicker, MonthPicker } from "@/components/app/date-picker";
 import { delayReason, STAGE_INFO, type OrderStage } from "@/lib/orders";
+import { overdueForDepartment, overdueForRole, purchasingToDeliveryDays, SLA_DAYS, slaOf } from "@/lib/sla";
 import { ROLE_LABEL, can, canViewDailySummary, canViewMonthlyMetrics, moduleAccess, POSITION_LABEL, POSITIONS, titleOf } from "@/lib/rbac";
+import { PAGE_LABEL, stageLabel, TERM_HELP } from "@/lib/terms";
 import type { RecordItem } from "@/lib/types";
 import { cn, formatDateTime, timeAgo } from "@/lib/utils";
 import { useApp, useMe } from "@/store/app-store";
@@ -23,7 +25,6 @@ const PHT_DAY = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila" });
 const PHT_LABEL = new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", month: "short", day: "numeric" });
 const LONG_DAY = new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", weekday: "long", month: "long", day: "numeric" });
 const MONTH = new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", month: "long", year: "numeric" });
-const SHORT_MONTH = new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", month: "short" });
 
 /** Calendar day (YYYY-MM-DD) and month (YYYY-MM) in Philippine time. */
 const dayKey = (d: string | Date) => PHT_DAY.format(new Date(d));
@@ -56,12 +57,47 @@ export function DailySummary({ className }: { className?: string }) {
   return <DailySummaryCard className={className} />;
 }
 
+type SummaryRange = "day" | "week" | "month" | "year" | "custom";
+const RANGE_LABEL: Record<SummaryRange, string> = { day: "Day", week: "Week", month: "Month", year: "Year", custom: "Custom" };
+const SHORT_DAY = new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", month: "short", day: "numeric" });
+const YEAR_DAY = new Intl.DateTimeFormat("en-PH", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" });
+const utcKey = (d: Date) => d.toISOString().slice(0, 10);
+
+/** First and last day ("YYYY-MM-DD") of the period around `day`. Weeks run Monday to Sunday. */
+function rangeOf(kind: SummaryRange, day: string, from: string, to: string): [string, string] {
+  const d = new Date(`${day}T00:00:00Z`);
+  const y = d.getUTCFullYear(), m = d.getUTCMonth();
+  if (kind === "week") {
+    const monday = new Date(d); monday.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+    const sunday = new Date(monday); sunday.setUTCDate(monday.getUTCDate() + 6);
+    return [utcKey(monday), utcKey(sunday)];
+  }
+  if (kind === "month") return [utcKey(new Date(Date.UTC(y, m, 1))), utcKey(new Date(Date.UTC(y, m + 1, 0)))];
+  if (kind === "year") return [`${y}-01-01`, `${y}-12-31`];
+  if (kind === "custom") return from <= to ? [from, to] : [to, from];
+  return [day, day];
+}
+
+function rangeText(kind: SummaryRange, [a, b]: [string, string]) {
+  const A = new Date(`${a}T00:00:00Z`), B = new Date(`${b}T00:00:00Z`);
+  if (kind === "day") return `on ${LONG_DAY.format(A)}`;
+  if (kind === "month") return `in ${MONTH.format(A)}`;
+  if (kind === "year") return `in ${a.slice(0, 4)}`;
+  if (a === b) return `on ${LONG_DAY.format(A)}`;
+  return `from ${(a.slice(0, 4) === b.slice(0, 4) ? SHORT_DAY : YEAR_DAY).format(A)} to ${YEAR_DAY.format(B)}`;
+}
+
 function DailySummaryCard({ className }: { className?: string }) {
   const orders = useOrders();
   const today = dayKey(new Date());
+  const [kind, setKind] = useState<SummaryRange>("day");
   const [day, setDay] = useState(today);
+  const [from, setFrom] = useState(today);
+  const [to, setTo] = useState(today);
+  const [start, end] = rangeOf(kind, day, from, to);
   const { processes, byRole, paid, unpaid } = useMemo(() => {
-    const processes = orders.flatMap((o) => o.order!.log.filter((e) => dayKey(e.at) === day).map((e) => ({ e, o })));
+    const inRange = (at: string) => { const k = dayKey(at); return k >= start && k <= end; };
+    const processes = orders.flatMap((o) => o.order!.log.filter((e) => inRange(e.at)).map((e) => ({ e, o })));
     const byRole = [
       ...POSITIONS.map((p) => ({ label: POSITION_LABEL[p], n: processes.filter((x) => x.e.position === p).length })),
       { label: "New from Bitrix24", n: processes.filter((x) => x.e.by === "Bitrix24").length },
@@ -70,8 +106,8 @@ function DailySummaryCard({ className }: { className?: string }) {
     for (const { e, o } of processes) touched.set(o.id, { o, last: e.description });
     const list = [...touched.values()];
     return { processes, byRole, paid: list.filter((x) => x.o.data.payment === "Paid"), unpaid: list.filter((x) => x.o.data.payment !== "Paid") };
-  }, [orders, day]);
-  const label = LONG_DAY.format(new Date(`${day}T00:00:00Z`));
+  }, [orders, start, end]);
+  const label = rangeText(kind, [start, end]);
 
   const column = (title: string, tone: "success" | "warning", rows: typeof paid) => (
     <div className="min-w-0 rounded-2xl bg-muted p-4">
@@ -83,7 +119,7 @@ function DailySummaryCard({ className }: { className?: string }) {
           {rows.length} order{rows.length === 1 ? "" : "s"} · <Money value={rows.reduce((a, x) => a + Number(x.o.data.amount), 0)} />
         </span>
       </div>
-      {rows.length === 0 ? <p className="py-2 text-xs text-muted-foreground">None on this day</p> : (
+      {rows.length === 0 ? <p className="py-2 text-xs text-muted-foreground">{kind === "day" ? "None on this day" : "None in this period"}</p> : (
         <ul className="flex flex-col gap-1">
           {rows.map(({ o, last }) => (
             <li key={o.id}>
@@ -106,16 +142,27 @@ function DailySummaryCard({ className }: { className?: string }) {
       <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex flex-col gap-1">
           <CardTitle>Daily process summary</CardTitle>
-          <CardDescription>Steps completed and orders handled on {label}</CardDescription>
+          <CardDescription>Stages completed and orders handled {label}</CardDescription>
         </div>
-        <div className="flex items-center gap-2">
-          {day !== today && <Button variant="ghost" size="sm" onClick={() => setDay(today)}>Today</Button>}
-          <Input type="date" value={day} max={today} onChange={(e) => e.target.value && setDay(e.target.value)} className="h-9 w-40" aria-label="Summary date" />
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+          <Select value={kind} onValueChange={(v) => setKind(v as SummaryRange)}>
+            <SelectTrigger className="h-10 w-28" aria-label="Summary period"><SelectValue /></SelectTrigger>
+            <SelectContent>{(Object.keys(RANGE_LABEL) as SummaryRange[]).map((k) => <SelectItem key={k} value={k}>{RANGE_LABEL[k]}</SelectItem>)}</SelectContent>
+          </Select>
+          {kind === "custom" ? (
+            <>
+              <DatePicker value={from} max={today} onChange={setFrom} className="w-40" aria-label="From" />
+              <span className="text-xs text-muted-foreground">to</span>
+              <DatePicker value={to} max={today} onChange={setTo} className="w-40" aria-label="To" />
+            </>
+          ) : (
+            <DatePicker value={day} max={today} onChange={setDay} className="w-40" aria-label={kind === "day" ? "Summary date" : `A day in the ${kind}`} />
+          )}
         </div>
       </CardHeader>
       <CardContent className="grid gap-4">
         <div className="flex flex-wrap gap-2 text-xs">
-          <span className="rounded-full bg-primary px-3 py-1 font-medium text-primary-foreground">{processes.length} step{processes.length === 1 ? "" : "s"} completed</span>
+          <span className="rounded-full bg-primary px-3 py-1 font-medium text-primary-foreground">{processes.length} stage{processes.length === 1 ? "" : "s"} completed</span>
           {byRole.map((r) => <span key={r.label} className="rounded-full bg-muted px-3 py-1"><span className="font-medium">{r.n}</span> {r.label}</span>)}
         </div>
         <div className="grid gap-3 md:grid-cols-2">
@@ -132,14 +179,15 @@ function DailySummaryCard({ className }: { className?: string }) {
 
 function monthStats(orders: RecordItem[], m: string) {
   const delivered = orders.filter((o) => { const at = docAt(o, "dr"); return at && monthKey(at) === m; });
-  const onTime = delivered.filter((o) => dayKey(docAt(o, "dr")!) <= String(o.data.due_date)).length;
+  const late = delivered.filter((o) => slaOf(o)?.late).length;
   const completed = orders.filter((o) => o.data.stage === "Done" && monthKey(o.order!.log.at(-1)!.at) === m);
-  const cycle = completed.map((o) => (new Date(o.order!.log.at(-1)!.at).getTime() - new Date(o.order!.log[0].at).getTime()) / DAY_MS);
+  const cycle = delivered.map(purchasingToDeliveryDays).filter((d): d is number => d !== null);
   return {
     received: orders.filter((o) => monthKey(o.order!.log[0].at) === m).length,
     completed: completed.length,
     delivered: delivered.length,
-    onTimePct: delivered.length ? Math.round((onTime / delivered.length) * 100) : null,
+    onTimePct: delivered.length ? Math.round(((delivered.length - late) / delivered.length) * 100) : null,
+    overduePct: delivered.length ? Math.round((late / delivered.length) * 100) : null,
     avgDays: cycle.length ? cycle.reduce((a, b) => a + b, 0) / cycle.length : null,
     invoiced: orders.filter((o) => { const at = docAt(o, "si"); return at && monthKey(at) === m; }).reduce((a, o) => a + Number(o.data.amount), 0),
     collected: orders.filter((o) => { const at = docAt(o, "payment"); return at && monthKey(at) === m; }).reduce((a, o) => a + Number(o.data.amount), 0),
@@ -162,24 +210,15 @@ function MonthlyMetricsCard({ className }: { className?: string }) {
     });
   }, []);
   const [month, setMonth] = useState(months[0]);
-  const prevKey = useMemo(() => {
-    const [y, mo] = month.split("-").map(Number);
-    return new Date(Date.UTC(y, mo - 2, 1)).toISOString().slice(0, 7);
-  }, [month]);
   const cur = useMemo(() => monthStats(orders, month), [orders, month]);
-  const prev = useMemo(() => monthStats(orders, prevKey), [orders, prevKey]);
-  const prevName = SHORT_MONTH.format(new Date(`${prevKey}-01T00:00:00Z`));
-  const delta = (a: number, b: number) => {
-    const d = a - b;
-    return d === 0 ? `Same as ${prevName}` : `${d > 0 ? "+" : ""}${d} vs ${prevName}`;
-  };
 
   const tiles: { label: string; value: React.ReactNode; hint: string }[] = [
-    { label: "Orders received", value: cur.received, hint: delta(cur.received, prev.received) },
-    { label: "Orders completed", value: cur.completed, hint: delta(cur.completed, prev.completed) },
-    { label: "On-time deliveries", value: cur.onTimePct === null ? "—" : `${cur.onTimePct}%`, hint: `${cur.delivered} delivered this month` },
-    { label: "Average time to complete", value: cur.avgDays === null ? "—" : `${cur.avgDays.toFixed(1)} days`, hint: "From won deal to payment" },
-    { label: "Invoiced sales", value: <Money value={cur.invoiced} />, hint: "Sales invoices issued" },
+    { label: "Orders received", value: cur.received, hint: "Orders confirmed this month" },
+    { label: "Orders completed", value: cur.completed, hint: "Collection done this month" },
+    { label: "On-time deliveries", value: cur.onTimePct === null ? "—" : `${cur.onTimePct}%`, hint: `${cur.delivered} delivered, within ${SLA_DAYS.standard} days of Purchasing` },
+    { label: "Overdue deliveries", value: cur.overduePct === null ? "—" : `${cur.overduePct}%`, hint: `Past the ${SLA_DAYS.standard}-day limit (${SLA_DAYS.hardToSource} if hard to source)` },
+    { label: "Average time to complete", value: cur.avgDays === null ? "—" : `${cur.avgDays.toFixed(1)} days`, hint: "From Purchasing to delivery" },
+    { label: "Invoiced amount", value: <Money value={cur.invoiced} />, hint: "Sales invoices issued" },
     { label: "Payments collected", value: <Money value={cur.collected} />, hint: "Official receipts issued" },
     { label: "Low-stock items", value: lowStock.length, hint: "At or below reorder level now" },
   ];
@@ -190,10 +229,7 @@ function MonthlyMetricsCard({ className }: { className?: string }) {
           <CardTitle>Monthly metrics</CardTitle>
           <CardDescription>Shared business and operations numbers for {MONTH.format(new Date(`${month}-01T00:00:00Z`))}</CardDescription>
         </div>
-        <Select value={month} onValueChange={setMonth}>
-          <SelectTrigger className="h-9 w-44" aria-label="Month"><SelectValue /></SelectTrigger>
-          <SelectContent>{months.map((m) => <SelectItem key={m} value={m}>{MONTH.format(new Date(`${m}-01T00:00:00Z`))}</SelectItem>)}</SelectContent>
-        </Select>
+        <MonthPicker value={month} months={months} onChange={setMonth} />
       </CardHeader>
       <CardContent className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {tiles.map((t) => (
@@ -218,7 +254,7 @@ function OrderRow({ o, extra, warning }: { o: RecordItem; extra?: React.ReactNod
       <span className="min-w-0 flex-1">
         <span className="block truncate"><span className="font-medium">{o.data.order_no}</span> <span className="text-muted-foreground">{o.data.customer}</span></span>
         <span className="block truncate text-xs text-muted-foreground">
-          {o.data.stage === "Done" ? "Completed" : `${o.data.stage} · waiting on ${owner ? POSITION_LABEL[owner] : "—"}`}
+          {o.data.stage === "Done" ? stageLabel("Done") : `${stageLabel(String(o.data.stage))} · waiting on ${owner ? POSITION_LABEL[owner] : "—"}`}
         </span>
         {warning && <span className="mt-0.5 flex items-center gap-1 text-xs text-warning"><Clock className="h-3 w-3 shrink-0" /><span className="truncate">{warning}</span></span>}
       </span>
@@ -280,7 +316,7 @@ function NeedsAttention() {
       <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard label="Delayed orders" value={a.delayed.length} icon={<Clock />} tone={a.delayed.length ? "warning" : "success"} hint={`${a.active.length - a.delayed.length} of ${a.active.length} on track`} />
         <StatCard label="Unpaid orders" value={a.unpaid.length} icon={<Wallet />} tone={receivable.length ? "warning" : "default"} hint={<>{receivable.length} delivered, awaiting payment</>} />
-        <StatCard label="Sync and batch issues" value={technical} icon={<GitMerge />} tone={technical ? "danger" : "success"} hint="Conflicts, failures, rejected rows" />
+        <StatCard label="Records that need attention" value={technical} icon={<GitMerge />} tone={technical ? "warning" : "success"} hint="Need review, and changes that couldn't be sent" />
         <StatCard label="Low-stock items" value={a.lowStock.length} icon={<PackageX />} tone={a.lowStock.length ? "warning" : "success"} hint="At or below reorder level" />
       </div>
       <div className="stagger grid gap-4 lg:grid-cols-2">
@@ -298,33 +334,37 @@ function NeedsAttention() {
             </div>
           ))}
         </AttentionCard>
-        <AttentionCard title="Delayed orders" description="Past due, on hold, or stuck in one step" empty="Every order is on schedule" count={a.delayed.length}>
+        <AttentionCard title="Delayed orders" description="Past the delivery limit, or on hold" empty="Every order is on schedule" count={a.delayed.length}>
           {a.delayed.map(({ o, why }) => <OrderRow key={o.id} o={o} warning={why} />)}
         </AttentionCard>
-        <AttentionCard title="Unpaid transactions" description="Delivered orders awaiting payment are listed first" empty="Every order is paid" count={a.unpaid.length}>
+        <AttentionCard title="Unpaid orders" description="Delivered orders awaiting payment are listed first" empty="Every order is paid" count={a.unpaid.length}>
           {a.unpaid.map((o) => (
-            <OrderRow key={o.id} o={o} extra={<>{o.data.stage === "Collection" && <Badge variant="warning">Delivered</Badge>}<Money value={o.data.amount} className="text-xs" /></>} />
+            <OrderRow key={o.id} o={o} extra={<>
+              {o.data.payment_terms && <span className="text-xs text-muted-foreground">{String(o.data.payment_terms)}</span>}
+              {o.data.stage === "Collection" && (<PaymentDueBadge rec={o} />)}
+              <Money value={o.data.amount} className="text-xs" />
+            </>} />
           ))}
         </AttentionCard>
         <AttentionCard
-          title="Sync and batch issues" description="Records that failed to sync, load, or process" empty="Everything synced and processed" count={technical}
-          action={technical > 0 ? <Button asChild variant="outline" size="sm"><Link to="/sync">Open Sync center</Link></Button> : undefined}
+          title="Records that need attention" description="Records that failed to send, load, or process" empty="Everything sent and processed" count={technical}
+          action={technical > 0 ? <Button asChild variant="outline" size="sm"><Link to="/sync">Open {PAGE_LABEL.bitrixUpdates}</Link></Button> : undefined}
         >
           {a.syncIssues.map((op) => (
             <Link key={op.id} to="/sync" className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-muted">
-              <span><span className="font-medium">{op.recordLabel}</span> <span className="text-muted-foreground">{op.status === "conflict" ? "changed in both systems" : "write-back failed"}</span></span>
-              <Badge variant={op.status === "conflict" ? "warning" : "destructive"}>{op.status === "conflict" ? "Conflict" : "Failed"}</Badge>
+              <span><span className="font-medium">{op.recordLabel}</span> <span className="text-muted-foreground">{op.status === "conflict" ? "changed in both systems" : "couldn't be sent"}</span></span>
+              <Badge variant={op.status === "conflict" ? "warning" : "destructive"}>{op.status === "conflict" ? "Needs review" : "Failed"}</Badge>
             </Link>
           ))}
           {a.openRejected.map((r) => (
             <Link key={r.id} to="/pipeline" className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-muted">
-              <span className="min-w-0"><span className="font-medium">Rejected row {r.rowIndex}</span> <span className="block truncate text-xs text-muted-foreground">{r.errors[0]}</span></span>
-              <Badge variant="warning">Rejected</Badge>
+              <span className="min-w-0"><span className="font-medium">Record to fix {r.rowIndex}</span> <span className="block truncate text-xs text-muted-foreground">{r.errors[0]}</span></span>
+              <Badge variant="warning">Needs fixing</Badge>
             </Link>
           ))}
           {a.batchIssues.map((x, i) => (
             <Link key={`${x.label}-${i}`} to="/sync" className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors hover:bg-muted">
-              <span className="min-w-0"><span className="font-medium">{x.label}</span> <span className="block truncate text-xs text-muted-foreground">Last batch: {x.message}</span></span>
+              <span className="min-w-0"><span className="font-medium">{x.label}</span> <span className="block truncate text-xs text-muted-foreground">Last run: {x.message}</span></span>
               <Badge variant={x.result === "failed" ? "destructive" : "warning"}>{x.result === "failed" ? "Failed" : "Needs action"}</Badge>
             </Link>
           ))}
@@ -344,17 +384,52 @@ function NeedsAttention() {
 
 function MyKpis({ className }: { className?: string }) {
   const me = useMe()!;
-  const { employees, prevName } = useKpiData(monthKey(new Date()));
+  const { employees } = useKpiData(monthKey(new Date()));
   const mine = employees.find((k) => k.user.id === me.id);
   if (!mine) return null;
   return (
     <div className={cn("grid gap-2", className)}>
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-medium text-muted-foreground">My KPIs this month</h2>
+        <h2 className="text-sm font-medium text-muted-foreground">My performance this month</h2>
         <Link to="/performance" className="text-sm text-primary hover:underline">Details</Link>
       </div>
-      <KpiCard k={mine} prevName={prevName} />
+      <KpiCard k={mine} />
     </div>
+  );
+}
+
+/** C4: the role's open orders past their limit, red first. Accounting's are late payments. */
+function OverdueList({ department = false }: { department?: boolean }) {
+  const me = useMe()!;
+  const orders = useOrders();
+  const list = department
+    ? overdueForDepartment(orders)
+    : me.position ? overdueForRole(orders, me.position, (o) => STAGE_INFO[o.data.stage as OrderStage]?.owner) : [];
+  const accounting = !department && me.position === "accounting";
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Overdue</CardTitle>
+        <CardDescription>
+          {accounting
+            ? "Delivered orders past their payment due date (delivery date plus payment terms). Red has no reason recorded."
+            : department
+              ? `Open orders that ran past the delivery limit (${SLA_DAYS.standard} days from Purchasing, ${SLA_DAYS.hardToSource} if hard to source), delivered or not. Red has no reason recorded and is listed first.`
+              : `Orders at your stage past the delivery limit (${SLA_DAYS.standard} days from Purchasing, ${SLA_DAYS.hardToSource} if hard to source). Red has no reason recorded.`}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {list.length === 0 ? (
+          <p className="flex items-center gap-2 rounded-xl bg-success/5 px-3 py-2.5 text-sm text-success"><CheckCircle2 className="h-4 w-4" />Nothing overdue</p>
+        ) : (
+          <div className="flex flex-col gap-0.5">
+            {list.map(({ o }) => (
+              <OrderRow key={o.id} o={o} extra={accounting ? <PaymentDueBadge rec={o} /> : <OverdueBadge rec={o} />} />
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -369,14 +444,14 @@ function WaitingOnYou({ className }: { className?: string }) {
           Waiting on you
           {mine.length > 0 && <span className="rounded-full bg-primary px-2 py-0.5 text-xs tabular text-primary-foreground">{mine.length}</span>}
         </CardTitle>
-        <CardDescription>Orders at a step your role ({me.position ? POSITION_LABEL[me.position] : "unassigned"}) completes</CardDescription>
+        <CardDescription>Orders at the stage your role ({me.position ? POSITION_LABEL[me.position] : "unassigned"}) completes</CardDescription>
       </CardHeader>
       <CardContent>
         {mine.length === 0 ? (
           <p className="flex items-center gap-2 rounded-xl bg-success/5 px-3 py-2.5 text-sm text-success"><CheckCircle2 className="h-4 w-4" />Nothing is waiting on you right now</p>
         ) : (
           <div className="flex flex-col gap-0.5">
-            {mine.map((o) => <OrderRow key={o.id} o={o} warning={delayReason(o)} extra={<StageBadge stage={String(o.data.stage)} />} />)}
+            {mine.map((o) => <OrderRow key={o.id} o={o} warning={delayReason(o)} extra={<span className="flex flex-wrap justify-end gap-1.5"><OverdueBadge rec={o} compact /><StageBadge stage={String(o.data.stage)} /></span>} />)}
           </div>
         )}
       </CardContent>
@@ -400,16 +475,16 @@ function PipelineChart() {
       const dayRuns = runs.filter((r) => PHT_DAY.format(new Date(r.startedAt)) === key);
       return {
         day: PHT_LABEL.format(d),
-        Loaded: dayRuns.reduce((a, r) => a + r.loaded, 0),
-        Rejected: dayRuns.reduce((a, r) => a + r.rejected, 0),
+        Validated: dayRuns.reduce((a, r) => a + r.loaded, 0),
+        "Need fixing": dayRuns.reduce((a, r) => a + r.rejected, 0),
       };
     });
   }, [runs]);
   return (
     <Card className="lg:col-span-2">
       <CardHeader>
-        <CardTitle>Pipeline throughput</CardTitle>
-        <CardDescription>Rows loaded and rejected over the last 7 days</CardDescription>
+        <CardTitle>Records validated each day</CardTitle>
+        <CardDescription>Rows validated and rows that need fixing over the last 7 days</CardDescription>
       </CardHeader>
       <CardContent className="h-64 pl-1">
         <ResponsiveContainer width="100%" height="100%">
@@ -418,8 +493,8 @@ function PipelineChart() {
             <XAxis dataKey="day" tickLine={false} axisLine={false} fontSize={12} stroke="hsl(var(--muted-foreground))" />
             <YAxis tickLine={false} axisLine={false} fontSize={12} width={32} stroke="hsl(var(--muted-foreground))" allowDecimals={false} />
             <Tooltip cursor={{ fill: "hsl(var(--muted))" }} contentStyle={tooltipStyle} />
-            <Bar dataKey="Loaded" stackId="a" fill="hsl(var(--primary))" radius={[0, 0, 0, 0]} />
-            <Bar dataKey="Rejected" stackId="a" fill="hsl(var(--warning))" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="Validated" stackId="a" fill="hsl(var(--primary))" radius={[0, 0, 0, 0]} />
+            <Bar dataKey="Need fixing" stackId="a" fill="hsl(var(--warning))" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </CardContent>
@@ -437,7 +512,7 @@ function RecentActivity({ className }: { className?: string }) {
       <CardHeader className="flex-row items-center justify-between">
         <div className="flex flex-col gap-1">
           <CardTitle>System activity</CardTitle>
-          <CardDescription>Syncs, pipeline runs, and alerts</CardDescription>
+          <CardDescription>Updates, file imports, and alerts</CardDescription>
         </div>
         </CardHeader>
       <CardContent className="flex flex-col gap-4">
@@ -464,8 +539,8 @@ function ModuleHealth() {
   return (
     <Card className="lg:col-span-3">
       <CardHeader>
-        <CardTitle>Module health</CardTitle>
-        <CardDescription>Connection and last sync for each active module</CardDescription>
+        <CardTitle>System health</CardTitle>
+        <CardDescription>Connection and last update for each active module</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {modules.map((m) => {
@@ -502,8 +577,8 @@ function AdminOverview() {
       <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
         <StatCard label="Active accounts" value={active.length} icon={<UserCheck />} hint={`${users.length} total`} />
         <StatCard label="Disabled accounts" value={users.length - active.length} icon={<ShieldOff />} hint="Can't sign in" />
-        <StatCard label="Sign-ins today" value={signIns} icon={<Clock />} hint="Last 24 hours" />
-        <StatCard label="Audit events today" value={events} icon={<Workflow />} hint="Last 24 hours" />
+        <StatCard label="Sign-ins in the last 24 hours" value={signIns} icon={<Clock />} hint="Last 24 hours" />
+        <StatCard label="Changes in the last 24 hours" value={events} icon={<Workflow />} hint="Last 24 hours" />
       </div>
       <div className="stagger mt-4 grid gap-4 lg:grid-cols-3">
         <Card>
@@ -546,13 +621,13 @@ export function OverviewPage() {
   const rejected = useApp((s) => s.rejected);
   const outage = useApp((s) => s.outage);
   const attention = useAttention();
-  // Headings name the role, not the person: the same screen reads the same for whoever holds it.
+  // Headings name the scope the person owns, so the same screen reads the same for whoever holds it.
   const role = titleOf(me);
 
   if (me.role === "super_admin") {
     return (
       <>
-        <PageHeader title={role} description="Account status and recent activity across Zentra." />
+        <PageHeader title={role} description="Accounts, roles, and recent activity across Zentra." />
         <AdminOverview />
       </>
     );
@@ -564,20 +639,35 @@ export function OverviewPage() {
 
   if (!can(me, "sync.manage")) {
     const mine = active.filter((o) => STAGE_INFO[o.data.stage as OrderStage]?.owner === me.position);
+    const overdue = me.position ? overdueForRole(orders, me.position, (o) => STAGE_INFO[o.data.stage as OrderStage]?.owner) : [];
     return (
       <>
-        <PageHeader title={role} description="Your tasks and today's numbers" />
+        <PageHeader title={role} description={`Your ${me.position ? POSITION_LABEL[me.position].toLowerCase() : ""} tasks and today's numbers`} />
         <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-          <StatCard label="Waiting on you" value={mine.length} icon={<Hourglass />} tone={mine.length ? "warning" : "success"} hint="Orders at your step" />
+          <StatCard label="Waiting on you" value={mine.length} icon={<Hourglass />} tone={mine.length ? "warning" : "success"} hint="Orders at your stage" />
           <StatCard label="Orders in progress" value={active.length} icon={<Truck />} hint="Across all roles" />
           <StatCard label="Completed this month" value={completedThisMonth} icon={<UserCheck />} tone="success" hint="Delivered and paid" />
           <StatCard label="Low-stock items" value={lowStock.length} icon={<PackageX />} tone={lowStock.length ? "warning" : "default"} hint="At or below reorder level" />
         </div>
-        <div className="stagger mt-4 grid gap-4 lg:grid-cols-3">
-          <WaitingOnYou className={canViewDailySummary(me) ? "lg:col-span-1" : "lg:col-span-3"} />
-          {canViewDailySummary(me) && <DailySummary className="lg:col-span-2" />}
-          <MyKpis className="lg:col-span-3" />
-        </div>
+        <Tabs defaultValue="work" className="mt-4">
+          <TabsList className="mb-0">
+            <TabsTrigger value="work">My work</TabsTrigger>
+            <TabsTrigger value="overdue">
+              Overdue
+              {overdue.length > 0 && (
+                <span className={cn("rounded-full px-1.5 text-xs tabular", overdue.some((x) => x.state === "overdue") ? "bg-destructive/15 text-destructive" : "bg-warning/15 text-warning")}>{overdue.length}</span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="work">
+            <div className="stagger grid gap-4 lg:grid-cols-3">
+              <WaitingOnYou className={canViewDailySummary(me) ? "lg:col-span-1" : "lg:col-span-3"} />
+              {canViewDailySummary(me) && <DailySummary className="lg:col-span-2" />}
+              <MyKpis className="lg:col-span-3" />
+            </div>
+          </TabsContent>
+          <TabsContent value="overdue"><OverdueList /></TabsContent>
+        </Tabs>
       </>
     );
   }
@@ -588,18 +678,25 @@ export function OverviewPage() {
   const loaded = recentRuns.reduce((a, r) => a + r.loaded, 0);
   const issues = syncOps.filter((o) => o.status === "conflict" || o.status === "failed").length;
   const openRejected = rejected.filter((r) => r.status === "open").length;
+  const overdue = overdueForDepartment(orders);
 
   return (
     <>
-      <PageHeader title={role} description="Business performance, operations, and what needs your decision." />
-      <Tabs defaultValue="general">
+      <PageHeader title={role} help={TERM_HELP.stage} description="Business performance, operations, and what needs your decision." />
+      <Tabs defaultValue="attention">
         <TabsList className="mb-0">
-          <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="general">Overview</TabsTrigger>
           <TabsTrigger value="attention">
             <span className="sm:hidden">Attention</span><span className="hidden sm:inline">Needs attention</span>
             {attention.total > 0 && <span className="rounded-full bg-warning/15 px-1.5 text-xs tabular text-warning">{attention.total}</span>}
           </TabsTrigger>
-          <TabsTrigger value="technical">Technical</TabsTrigger>
+          <TabsTrigger value="overdue">
+            Overdue
+            {overdue.length > 0 && (
+              <span className={cn("rounded-full px-1.5 text-xs tabular", overdue.some((x) => x.state === "overdue") ? "bg-destructive/15 text-destructive" : "bg-warning/15 text-warning")}>{overdue.length}</span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="technical">System health</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general">
@@ -611,12 +708,14 @@ export function OverviewPage() {
 
         <TabsContent value="attention"><NeedsAttention /></TabsContent>
 
+        <TabsContent value="overdue"><OverdueList department /></TabsContent>
+
         <TabsContent value="technical" className="grid gap-4">
           <div className="stagger grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-            <StatCard label="Pipeline success" value={total ? `${Math.round((loaded / total) * 100)}%` : "—"} icon={<Workflow />} hint={`${total - loaded} of ${total} rows rejected this week`} />
-            <StatCard label="Sync issues" value={issues} icon={<GitMerge />} tone={issues ? "warning" : "success"} hint="Conflicts and failed write-backs" />
-            <StatCard label="Rejected rows" value={openRejected} icon={<AlertTriangle />} tone={openRejected ? "warning" : "success"} hint="Waiting in the ledger" />
-            <StatCard label="Bitrix24" value={outage ? "Offline" : "Online"} icon={<ShieldOff />} tone={outage ? "danger" : "success"} hint="API adapter, two-way sync" />
+            <StatCard label="Records validated" value={total ? `${Math.round((loaded / total) * 100)}%` : "—"} icon={<Workflow />} hint={`${total - loaded} of ${total} rows need fixing this week`} />
+            <StatCard label="Update issues" value={issues} icon={<GitMerge />} tone={issues ? "warning" : "success"} hint="Records that need review, and changes that couldn't be sent" />
+            <StatCard label="Records to fix" value={openRejected} icon={<AlertTriangle />} tone={openRejected ? "warning" : "success"} hint="Waiting for you to fix them" />
+            <StatCard label="Bitrix24" value={outage ? "Offline" : "Online"} icon={<ShieldOff />} tone={outage ? "danger" : "success"} hint="Connected to Bitrix24" />
           </div>
           <div className="stagger grid gap-4 lg:grid-cols-3">
             <PipelineChart />

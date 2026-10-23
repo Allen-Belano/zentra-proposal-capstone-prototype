@@ -19,10 +19,10 @@ Password for all accounts: `zentra2026`. The sign-in page has one-click buttons 
 
 | Account | Email | Does |
 |---|---|---|
-| Super Admin | superadmin@ifixz.com | Accounts, Department Heads, financial access, audit log |
-| Department Head | depthead@ifixz.com | Business overview, sync and batch processing, pipeline, registry, backups, team roles |
-| Accounting | jessa.accounting@ifixz.com | Credit checks and payments |
-| Purchasing | mark.purchasing@ifixz.com | Supplier POs |
+| Super Admin | superadmin@ifixz.com | Accounts, Operations Department Heads, financial access, audit log |
+| Operations Department Head | depthead@ifixz.com | Business overview, sync and batch processing, pipeline, registry, backups, team roles |
+| Accounting | jessa.accounting@ifixz.com | Order clearing and payments |
+| Purchasing | mark.purchasing@ifixz.com | Vendor P.Os |
 | Inventory | ana.inventory@ifixz.com | Inventory changes and receiving reports |
 | Invoicing | paolo.invoicing@ifixz.com | Sales invoices and written reports |
 | Delivery | lea.delivery@ifixz.com | Deliveries and delivery receipts |
@@ -35,7 +35,7 @@ New to Zentra? Start with **[docs/QUICK_START.md](docs/QUICK_START.md)**, a one-
 
 **[docs/USER_GUIDE.md](docs/USER_GUIDE.md)** has the full detail:
 
-- how an order moves from the won deal to payment, and which role owns each step
+- how an order moves from the confirmed order to payment, and which role owns each stage
 - what each role sees and does
 - common tasks: order pages, batch processing, assigning roles, granting financial access
 - who can see and change what
@@ -64,7 +64,7 @@ The proposed production stack (Chapter III of the paper) uses Next.js on the fro
 src/
   components/ui/     shadcn/ui components
   components/app/    app shell, sidebar, guards, shared pieces, module registration wizard
-  data/seed.ts       mock users, modules, orders with step histories, runs, sync history
+  data/seed.ts       mock users, modules, orders with stage histories, runs, sync history
   lib/orders.ts      order flow: steps, responsible roles, actions, documents
   lib/adapters.ts    adapter types, connection fields, module templates, rule generator
   lib/rbac.ts        roles, Operations positions, permissions, financial access

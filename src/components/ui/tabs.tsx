@@ -36,7 +36,13 @@ export const TabsList = React.forwardRef<
         if (typeof ref === "function") ref(node);
         else if (ref) ref.current = node;
       }}
-      className={cn("relative inline-flex h-10 max-w-full items-center justify-start rounded-full border border-border bg-muted p-1 text-muted-foreground", className)}
+      className={cn(
+        // h-11 (44px) exactly fits the 36px trigger plus the 4px padding on each
+        // side. A shorter list overflows by a couple of pixels, and because
+        // overflow-x forces overflow-y to auto, that shows up as a scrollbar.
+        "relative inline-flex h-11 max-w-full items-center justify-start overflow-x-auto overflow-y-hidden rounded-full bg-muted p-1 text-muted-foreground",
+        className,
+      )}
       {...props}
     >
       {box && (
@@ -59,7 +65,7 @@ export const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      "relative z-10 inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-2 text-sm font-medium transition-colors duration-200 hover:text-foreground disabled:pointer-events-none disabled:opacity-50 data-[state=active]:text-foreground sm:px-3.5",
+      "relative z-10 inline-flex h-9 items-center justify-center gap-1.5 whitespace-nowrap rounded-full px-2 text-sm font-medium transition-colors duration-200 hover:text-foreground disabled:pointer-events-none disabled:opacity-50 data-[state=active]:text-foreground sm:px-3.5",
       className,
     )}
     {...props}

@@ -4,9 +4,19 @@ export const RULE_LABEL: Record<ValidationRule["kind"], string> = {
   required: "Required",
   number: "Must be a number",
   min: "Minimum value",
-  pattern: "Format (regex)",
+  pattern: "Format",
   unique: "No duplicates",
   oneOf: "Allowed values",
+};
+
+/** A plain-language hint for each rule kind, shown under the value field. */
+export const RULE_HELP: Record<ValidationRule["kind"], string> = {
+  required: "The field cannot be left empty.",
+  number: "The value must be a number.",
+  min: "The value cannot be less than this.",
+  pattern: "The value must look like this, for example ABC-1234.",
+  unique: "No two records can have the same value here.",
+  oneOf: "The value must be one of the listed options.",
 };
 
 function fieldLabel(mod: ModuleDef, key: string) {
@@ -14,8 +24,8 @@ function fieldLabel(mod: ModuleDef, key: string) {
 }
 
 /**
- * The validation stage of the ETL pipeline. Every write — CSV import, external sync,
- * or a form edit — passes through here before it reaches the central database.
+ * The checking stage of a file import. Every write — a file import, an update
+ * from Bitrix24, or a form edit — is checked here before it is saved.
  */
 export function validateRow(
   mod: ModuleDef,
@@ -38,7 +48,7 @@ export function validateRow(
       errors.push(`${label} can't be below ${rule.value}`);
     if (rule.kind === "pattern" && rule.value) {
       try {
-        if (!new RegExp(rule.value).test(value)) errors.push(`${label} "${value}" doesn't match the expected format`);
+        if (!new RegExp(rule.value).test(value)) errors.push(`${label} "${value}" doesn't look like the expected format`);
       } catch {
         /* invalid regex is ignored */
       }

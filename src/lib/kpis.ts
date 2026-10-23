@@ -1,4 +1,5 @@
 import { delayReason, STAGE_INFO, type OrderStage } from "./orders";
+import { deliveredAt, purchasingToDeliveryDays, slaOf } from "./sla";
 import type { OrderLogEntry, Position, RecordItem, User } from "./types";
 
 /**
@@ -13,8 +14,8 @@ const HOUR = 3_600_000;
 
 /** Target time to finish a step once an order reaches it, per role. */
 export const TARGET_HOURS: Record<Position, number> = {
-  accounting: 24,  // credit check or payment follow-up within a day
-  purchasing: 24,  // reserve stock or raise the supplier PO within a day
+  accounting: 24,  // clearing an order or following up a payment within a day
+  purchasing: 24,  // reserve stock or raise the vendor P.O within a day
   inventory: 72,   // supplier deliveries can take a few days to arrive and be received
   invoicing: 24,   // SI and WR within a day of receiving
   delivery: 48,    // delivered within two days of invoicing
@@ -23,7 +24,7 @@ export const TARGET_HOURS: Record<Position, number> = {
 /** The role-specific measure shown alongside the shared KPIs. */
 export const ROLE_METRIC: Record<Position, { label: string; hint: string; match: (e: OrderLogEntry) => boolean }> = {
   accounting: { label: "Payments collected", hint: "Official receipts recorded", match: (e) => /^Payment (collected|received)/.test(e.description) },
-  purchasing: { label: "Supplier POs issued", hint: "Including order-basis POs", match: (e) => e.description.startsWith("Supplier PO") },
+  purchasing: { label: "Vendor P.Os issued", hint: "Including order-basis POs", match: (e) => e.description.startsWith("Vendor P.O") },
   inventory: { label: "Receiving reports posted", hint: "Supplier deliveries received", match: (e) => e.description.includes("receiving report") },
   invoicing: { label: "Sales invoices issued", hint: "SI and WR pairs", match: (e) => e.description.startsWith("Sales invoice") },
   delivery: { label: "Deliveries completed", hint: "Signed delivery receipts", match: (e) => e.description.startsWith("Items delivered") },
@@ -37,7 +38,7 @@ export function completedSteps(orders: RecordItem[]): StepDone[] {
   for (const order of orders) {
     const log = order.order?.log ?? [];
     log.forEach((entry, i) => {
-      if (i === 0 || entry.role !== "employee" || !entry.position) return;
+      if (i === 0 || entry.role !== "employee" || !entry.position || entry.delay) return;
       out.push({ entry, order, hours: (new Date(entry.at).getTime() - new Date(log[i - 1].at).getTime()) / HOUR });
     });
   }
@@ -89,8 +90,12 @@ export interface DepartmentKpis {
   stepsPrev: number;
   completed: number;
   completedPrev: number;
+  /** Average days from entering Purchasing to the signed delivery receipt. */
   avgCycleDays: number | null;
+  /** Deliveries within the time limit, and past it. Together they make 100%. */
   onTimeDeliveryPct: number | null;
+  overdueDeliveryPct: number | null;
+  delivered: number;
   onTargetPct: number | null;
   open: number;
   delayed: number;
@@ -101,15 +106,18 @@ export function departmentKpis(orders: RecordItem[], steps: StepDone[], month: s
   const inMonth = steps.filter((s) => monthKey(s.entry.at) === month);
   const doneIn = (m: string) => orders.filter((o) => o.data.stage === "Done" && monthKey(o.order!.log.at(-1)!.at) === m);
   const completed = doneIn(month);
-  const deliveries = inMonth.filter((s) => ROLE_METRIC.delivery.match(s.entry));
+  const delivered = orders.filter((o) => { const at = deliveredAt(o); return at && monthKey(at) === month; });
+  const late = delivered.filter((o) => slaOf(o)?.late).length;
   const open = orders.filter((o) => o.data.stage !== "Done");
   return {
     steps: inMonth.length,
     stepsPrev: steps.filter((s) => monthKey(s.entry.at) === prevMonth).length,
     completed: completed.length,
     completedPrev: doneIn(prevMonth).length,
-    avgCycleDays: avg(completed.map((o) => (new Date(o.order!.log.at(-1)!.at).getTime() - new Date(o.order!.log[0].at).getTime()) / (24 * HOUR))),
-    onTimeDeliveryPct: pct(deliveries.filter((s) => dayKey(s.entry.at) <= String(s.order.data.due_date)).length, deliveries.length),
+    avgCycleDays: avg(delivered.map(purchasingToDeliveryDays).filter((d): d is number => d !== null)),
+    onTimeDeliveryPct: pct(delivered.length - late, delivered.length),
+    overdueDeliveryPct: pct(late, delivered.length),
+    delivered: delivered.length,
     onTargetPct: pct(inMonth.filter((s) => s.hours <= TARGET_HOURS[s.entry.position!]).length, inMonth.length),
     open: open.length,
     delayed: open.filter((o) => delayReason(o)).length,

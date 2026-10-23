@@ -10,7 +10,8 @@
     --card-foreground: 218 28% 13%;
     --popover: 0 0% 100%;
     --popover-foreground: 218 28% 13%;
-    --primary: 202 42% 23%;
+    /* Cisco Indigo: the filled primary action and the signal blue on light surfaces. */
+    --primary: 196 100% 23%;
     --primary-foreground: 0 0% 100%;
     --secondary: 216 22% 95.5%;
     --secondary-foreground: 218 28% 15%;
@@ -18,14 +19,21 @@
     --muted-foreground: 216 12% 46%;
     --accent: 216 20% 93%;
     --accent-foreground: 218 28% 15%;
-    --destructive: 358 70% 52%;
+    /* Information: the Cisco Blue hue, darkened so it reads as text on white. */
+    --info: 200 100% 37%;
+    --info-foreground: 0 0% 100%;
+    /* Success: the Status Green hue, darkened for text on white. */
+    --success: 96 60% 28%;
+    --success-foreground: 0 0% 100%;
+    /* Warning: the Status Orange hue, darkened for text on white. */
+    --warning: 32 90% 37%;
+    --warning-foreground: 0 0% 100%;
+    /* Failure, rejection and error: the Status Red. */
+    --destructive: 357 72% 47%;
     --destructive-foreground: 0 0% 100%;
-    --success: 152 60% 36%;
-    --warning: 28 90% 48%;
-    --info: 214 82% 52%;
     --border: 216 18% 90%;
     --input: 216 18% 88%;
-    --ring: 202 50% 40%;
+    --ring: 200 100% 40%;
     --sidebar: 0 0% 100%;
     --sidebar-border: 216 18% 91%;
     --radius: 0.875rem;
@@ -40,7 +48,8 @@
     --card-foreground: 210 20% 94%;
     --popover: 220 18% 11.5%;
     --popover-foreground: 210 20% 94%;
-    --primary: 192 55% 62%;
+    /* Status Blue on the dark canvas. */
+    --primary: 196 72% 64%;
     --primary-foreground: 205 45% 10%;
     --secondary: 220 16% 14.5%;
     --secondary-foreground: 210 20% 94%;
@@ -48,14 +57,21 @@
     --muted-foreground: 216 12% 62%;
     --accent: 220 16% 16%;
     --accent-foreground: 210 20% 94%;
-    --destructive: 358 75% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --success: 152 52% 48%;
-    --warning: 32 92% 56%;
-    --info: 212 90% 66%;
+    /* Cisco Blue, the exact signal colour from the design system. */
+    --info: 196 88% 43%;
+    --info-foreground: 205 45% 10%;
+    /* Status Green. */
+    --success: 79 55% 53%;
+    --success-foreground: 205 45% 10%;
+    /* Status Orange. */
+    --warning: 21 100% 50%;
+    --warning-foreground: 205 45% 10%;
+    /* Status Red, lifted so it reads as text on the dark canvas. */
+    --destructive: 357 88% 68%;
+    --destructive-foreground: 205 45% 10%;
     --border: 220 14% 17%;
     --input: 220 14% 20%;
-    --ring: 192 55% 62%;
+    --ring: 196 88% 43%;
     --sidebar: 220 18% 10%;
     --sidebar-border: 220 14% 16%;
     --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
@@ -70,6 +86,21 @@
   }
   :focus-visible { @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background; }
   ::selection { background: hsl(var(--primary) / 0.18); }
+
+  /* Slim scrollbars. The default Windows scrollbar is wide and eats the
+     sidebar's width; these stay out of the way of the content. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--foreground) / 0.22) transparent;
+  }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: hsl(var(--foreground) / 0.18);
+  }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--foreground) / 0.3); }
+  ::-webkit-scrollbar-corner { background: transparent; }
   /* Set briefly by the theme switcher so light and dark crossfade instead of snapping. */
   .theme-transition, .theme-transition *, .theme-transition *::before, .theme-transition *::after {
     transition: background-color 350ms ease, border-color 350ms ease, color 250ms ease, fill 250ms ease !important;
@@ -83,6 +114,15 @@
   .tabular { font-variant-numeric: tabular-nums; }
   .safe-top { padding-top: env(safe-area-inset-top, 0px); }
   .safe-bottom { padding-bottom: env(safe-area-inset-bottom, 0px); }
+  /* A scrollbar that stays out of the way until the area is hovered or a
+     control inside it is focused. Used for the sidebar nav. */
+  .scrollbar-slim { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+  .scrollbar-slim:hover, .scrollbar-slim:focus-within { scrollbar-color: hsl(var(--foreground) / 0.24) transparent; }
+  .scrollbar-slim::-webkit-scrollbar { width: 6px; }
+  .scrollbar-slim::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-slim::-webkit-scrollbar-thumb { background: transparent; border-radius: 9999px; }
+  .scrollbar-slim:hover::-webkit-scrollbar-thumb,
+  .scrollbar-slim:focus-within::-webkit-scrollbar-thumb { background: hsl(var(--foreground) / 0.24); }
   /* Children rise in one after another, e.g. a row of stat cards. */
   .stagger > * { animation: rise 520ms cubic-bezier(0.16, 1, 0.3, 1) both; }
   .stagger > *:nth-child(2) { animation-delay: 50ms; }

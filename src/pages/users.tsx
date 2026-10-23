@@ -81,9 +81,9 @@ function AdminUsers() {
     <Select value={u.role} onValueChange={async (v) => {
       if (!(await confirmAction({ title: `Change ${u.name}'s role?`, description: "Their pages and permissions change as soon as you confirm.", details: [["From", ROLE_LABEL[u.role]], ["To", ROLE_LABEL[v as Role]]], confirmLabel: "Change role" }))) return;
       setUserRole(u.id, v as Role); toast.success(`${u.name} is now a ${ROLE_LABEL[v as Role]}`); }}>
-      <SelectTrigger className="h-8 w-56" aria-label={`${u.name}'s role`}><SelectValue /></SelectTrigger>
+      <SelectTrigger className="h-10 w-56" aria-label={`${u.name}'s role`}><SelectValue /></SelectTrigger>
       <SelectContent>
-        <SelectItem value="dept_head">Department Head</SelectItem>
+        <SelectItem value="dept_head">{ROLE_LABEL.dept_head}</SelectItem>
         <SelectItem value="employee">Department Employee</SelectItem>
       </SelectContent>
     </Select>
@@ -106,11 +106,13 @@ function AdminUsers() {
     return (
       <Switch
         checked={!!u.financialAccess}
-        onCheckedChange={async (v) => {
-          if (!(await confirmAction(v
-            ? { title: `Let ${u.name} see financial data?`, description: "They'll see order amounts, unit costs, and receivables.", confirmLabel: "Grant access" }
-            : { title: `Hide financial data from ${u.name}?`, description: "Amounts and costs will show as ₱ •••• for them.", confirmLabel: "Remove access", destructive: true }))) return;
-          const r = setFinancialAccess(u.id, v); if (r.ok) toast.success(v ? `${u.name} can now see amounts` : `${u.name} can no longer see amounts`); }}
+        onCheckedChange={(v) => {
+          const r = setFinancialAccess(u.id, v);
+          if (!r.ok) return toast.error(r.errors?.[0] ?? "Couldn't change this access");
+          toast.success(v ? `${u.name} can now see amounts` : `${u.name} can no longer see amounts`, {
+            action: { label: "Undo", onClick: () => setFinancialAccess(u.id, !v) },
+          });
+        }}
         aria-label={`Let ${u.name} see financial data`}
       />
     );
@@ -118,7 +120,7 @@ function AdminUsers() {
   const position = (u: User) => (u.role === "employee" ? (u.position ? POSITION_LABEL[u.position] : "Unassigned") : "—");
   return (
     <>
-      <PageHeader title="Users and roles" description="Enable or disable accounts, assign Department Heads, and grant access to financial data." />
+      <PageHeader title="Users and roles" description="Enable or disable accounts, assign Operations Department Heads, and grant access to financial data." />
       <Card>
         <div className="border-b p-4">
           <div className="relative max-w-sm">
@@ -232,15 +234,14 @@ function TeamAccess() {
   const kpiSwitch = (u: User) => (
     <Switch
       checked={!!u.teamKpiAccess}
-      onCheckedChange={async (v) => {
-        if (!(await confirmAction(v
-          ? { title: `Let ${u.name} see team KPIs?`, description: "They'll see every Operations employee's KPIs and the department totals on the Performance page.", confirmLabel: "Grant access" }
-          : { title: `Remove ${u.name}'s team KPI access?`, description: "They'll only see their own KPIs.", confirmLabel: "Remove access", destructive: true }))) return;
+      onCheckedChange={(v) => {
         const r = setTeamKpiAccess(u.id, v);
-        if (r.ok) toast.success(v ? `${u.name} can now see team KPIs` : `${u.name} now sees only their own KPIs`);
-        else toast.error(r.errors?.[0] ?? "Couldn't change KPI access");
+        if (!r.ok) return toast.error(r.errors?.[0] ?? "Couldn't change this access");
+        toast.success(v ? `${u.name} can now see the team's key numbers` : `${u.name} now sees only their own numbers`, {
+          action: { label: "Undo", onClick: () => setTeamKpiAccess(u.id, !v) },
+        });
       }}
-      aria-label={`Let ${u.name} see team KPIs`}
+      aria-label={`Let ${u.name} see the team's key numbers`}
     />
   );
   const team = users.filter((u) => u.role === "employee" && u.department === me.department);
@@ -251,7 +252,7 @@ function TeamAccess() {
       onValueChange={async (v) => {
         if (!(await confirmAction({
           title: `Move ${u.name} to ${POSITION_LABEL[v as Position]}?`,
-          description: "Their pages, order steps, and access to amounts follow the new role right away.",
+          description: "Their pages, order stages, and access to amounts follow the new role right away.",
           details: [["From", u.position ? POSITION_LABEL[u.position] : "Unassigned"], ["To", POSITION_LABEL[v as Position]]],
           confirmLabel: "Change role",
         }))) return;
@@ -260,7 +261,7 @@ function TeamAccess() {
         else toast.error(r.errors?.[0] ?? "Couldn't change the role");
       }}
     >
-      <SelectTrigger className="h-8 w-40" aria-label={`${u.name}'s Operations role`}><SelectValue placeholder="Choose a role" /></SelectTrigger>
+      <SelectTrigger className="h-10 w-40" aria-label={`${u.name}'s Operations role`}><SelectValue placeholder="Choose a role" /></SelectTrigger>
       <SelectContent>{POSITIONS.map((p) => <SelectItem key={p} value={p}>{POSITION_LABEL[p]}</SelectItem>)}</SelectContent>
     </Select>
   );
@@ -268,7 +269,7 @@ function TeamAccess() {
     <Select value={u.moduleAccess[m.id] ?? "none"} onValueChange={async (v) => {
       if (!(await confirmAction({ title: `Change ${u.name}'s access to ${m.name}?`, description: "The change applies right away.", details: [["From", u.moduleAccess[m.id] ?? "none"], ["To", v]], confirmLabel: "Change access" }))) return;
       setModuleAccess(u.id, m.id, v as ModuleAccess); toast.success(`${u.name}: ${m.name} access updated`); }}>
-      <SelectTrigger className="h-8 w-32" aria-label={`${u.name} access to ${m.name}`}><SelectValue /></SelectTrigger>
+      <SelectTrigger className="h-10 w-32" aria-label={`${u.name} access to ${m.name}`}><SelectValue /></SelectTrigger>
       <SelectContent>
         <SelectItem value="none">No access</SelectItem>
         <SelectItem value="view">View</SelectItem>
@@ -296,7 +297,7 @@ function TeamAccess() {
                     <TableHead>Role / position</TableHead>
                     <TableHead className="hidden lg:table-cell">Inventory</TableHead>
                     <TableHead className="hidden lg:table-cell">Amounts and costs</TableHead>
-                    <TableHead>Team KPIs</TableHead>
+                    <TableHead>Team performance</TableHead>
                     {extraModules.map((m) => <TableHead key={m.id}>{m.name}</TableHead>)}
                   </TableRow>
                 </TableHeader>
@@ -330,7 +331,7 @@ function TeamAccess() {
                     {yesNo(canViewFinancials(u), canViewFinancials(u) ? "Sees amounts" : "Amounts hidden")}
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span className="text-sm text-muted-foreground">Team KPIs</span>
+                    <span className="text-sm text-muted-foreground">Team performance</span>
                     {kpiSwitch(u)}
                   </div>
                   {extraModules.map((m) => (
