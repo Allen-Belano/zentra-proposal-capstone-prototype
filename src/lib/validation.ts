@@ -79,8 +79,12 @@ export function transformRow(mod: ModuleDef, row: Record<string, string | number
     }
     if (f.type === "number" || f.type === "currency") out[f.key] = Number(String(v).replace(/[₱,\s]/g, ""));
     else if (f.type === "date") {
-      const d = new Date(String(v));
-      out[f.key] = Number.isNaN(d.getTime()) ? String(v) : d.toISOString().slice(0, 10);
+      const s = String(v).trim();
+      const d = new Date(s);
+      // Reads the date in the user's own time zone; toISOString would move 10/30/2026 back a day in PHT.
+      out[f.key] = /^\d{4}-\d{2}-\d{2}$/.test(s) ? s
+        : Number.isNaN(d.getTime()) ? s
+        : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     } else if (f.type === "select" && f.options) {
       const match = f.options.find((o) => o.toLowerCase() === String(v).trim().toLowerCase());
       out[f.key] = match ?? String(v).trim();
