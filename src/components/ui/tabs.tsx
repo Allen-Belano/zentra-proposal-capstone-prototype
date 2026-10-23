@@ -36,7 +36,7 @@ export const TabsList = React.forwardRef<
         if (typeof ref === "function") ref(node);
         else if (ref) ref.current = node;
       }}
-      className={cn("relative inline-flex h-10 max-w-full items-center justify-start overflow-x-auto rounded-full bg-muted p-1 text-muted-foreground", className)}
+      className={cn("relative inline-flex h-10 max-w-full items-center justify-start rounded-full border border-border bg-muted p-1 text-muted-foreground", className)}
       {...props}
     >
       {box && (
